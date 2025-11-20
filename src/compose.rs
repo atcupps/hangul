@@ -1,30 +1,22 @@
-use std::collections::HashSet;
+use std::fmt::Debug;
 
 use crate::chars::*;
-/// Given an iterator over characters, composes them into Hangul syllables.
-use crate::types::*;
-
-const CONSONANTS: &str = "ㅂㅈㄷㄱㅅㅁㄴㅇㄹㅎㅋㅌㅊㅍ";
-const VOWELS: &str = "ㅛㅕㅑㅐㅔㅒㅖㅗㅓㅏㅣㅠㅜㅡ";
-
-/// Determines the type of Hangul letter for a given character.
-/// Does NOT accept double consonants or composite vowels,
-/// since the idea is that this function is called on each
-/// individual character input. Also, does not work for
-/// archaic jamo like ᅀ.
-fn determine_hangul(c: char) -> Letter {
-    return if CONSONANTS.contains(c) {
-        Letter::Hangul(HangulLetter::Consonant(c))
-    } else if VOWELS.contains(c) {
-        Letter::Hangul(HangulLetter::Vowel(c))
-    } else {
-        Letter::NonHangul(c)
-    };
-}
 
 struct HangulWordComposer {
     prev_blocks: Vec<HangulBlock>,
     cur_block: BlockCompositionState,
+}
+
+impl Debug for HangulWordComposer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HangulWordComposer")
+            .field(
+                "prev_blocks",
+                &hangul_blocks_vec_to_string(&self.prev_blocks),
+            )
+            .field("cur_block", &self.cur_block)
+            .finish()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -69,7 +61,9 @@ impl HangulWordComposer {
     pub fn push(&mut self, letter: HangulLetter) -> WordCompositionState {
         match letter {
             HangulLetter::Consonant(c) => self.push_consonant(c),
+            HangulLetter::CompositeConsonant(c) => self.push_composite_consonant(c),
             HangulLetter::Vowel(c) => self.push_vowel(c),
+            HangulLetter::CompositeVowel(c) => self.push_composite_vowel(c),
         }
     }
 
@@ -124,6 +118,63 @@ impl HangulWordComposer {
         }
     }
 
+    fn push_composite_consonant(&mut self, c: char) -> WordCompositionState {
+        match self.cur_block {
+            // First letter: must be an initial consonant, then it's accepted,
+            // and a vowel is expected next. Otherwise invalid.
+            BlockCompositionState::ExpectingInitial => {
+                if is_valid_double_initial(c) {
+                    self.cur_block = BlockCompositionState::ExpectingVowel(c);
+                    WordCompositionState::Composable
+                } else {
+                    WordCompositionState::Invalid(c)
+                }
+            }
+
+            // Final letter could be a composite consonant, but not all
+            // composite consonants are valid finals to a block. If it's not
+            // valid, then it could be the start of a new block if it's a valid
+            // initial consonant.
+            BlockCompositionState::ExpectingCompositeVowelOrFinal(i, v) => {
+                if is_valid_composite_final(c) {
+                    self.cur_block = BlockCompositionState::ExpectingNextBlock(i, v, c);
+                    WordCompositionState::Composable
+                } else if is_valid_double_initial(c) {
+                    WordCompositionState::StartNewBlock(c)
+                } else {
+                    WordCompositionState::Invalid(c)
+                }
+            }
+
+            // Final letter could be a composite consonant, but not all
+            // composite consonants are valid finals to a block. If it's not,
+            // it could be the start of a new block if it's a valid initial.
+            BlockCompositionState::ExpectingFinal(i, v) => {
+                if is_valid_composite_final(c) {
+                    self.cur_block = BlockCompositionState::ExpectingNextBlock(i, v, c);
+                    WordCompositionState::Composable
+                } else if is_valid_double_initial(c) {
+                    WordCompositionState::StartNewBlock(c)
+                } else {
+                    WordCompositionState::Invalid(c)
+                }
+            }
+
+            // If there is already a final consonant, then a composite consonant
+            // indicates the start of a new block using that consonant, provided
+            // it is a valid initial consonant.
+            BlockCompositionState::ExpectingNextBlock(_, _, _) => {
+                if is_valid_double_initial(c) {
+                    WordCompositionState::StartNewBlock(c)
+                } else {
+                    WordCompositionState::Invalid(c)
+                }
+            }
+
+            _ => WordCompositionState::Invalid(c),
+        }
+    }
+
     fn push_vowel(&mut self, c: char) -> WordCompositionState {
         match self.cur_block {
             // First letter must be a consonant
@@ -167,6 +218,39 @@ impl HangulWordComposer {
             }
         }
     }
+
+    fn push_composite_vowel(&mut self, c: char) -> WordCompositionState {
+        match self.cur_block {
+            // If there is already a first letter and no vowel, then a double
+            // vowel is an acceptable input.
+            BlockCompositionState::ExpectingDoubleInitialOrVowel(i) => {
+                self.cur_block = BlockCompositionState::ExpectingFinal(i, c);
+                WordCompositionState::Composable
+            }
+
+            // If there is already a first letter and no vowel, then a double
+            // vowel is an acceptable input.
+            BlockCompositionState::ExpectingVowel(i) => {
+                self.cur_block = BlockCompositionState::ExpectingFinal(i, c);
+                WordCompositionState::Composable
+            }
+
+            // If there is a final consonant already, then a composite vowel
+            // indicates the start of a new block using that consonant
+            BlockCompositionState::ExpectingCompositeFinalOrNextBlock(_, _, _) => {
+                WordCompositionState::StartNewBlock(c)
+            }
+
+            // If there is a composite final consonant already, then a composite
+            // vowel indicates the start of a new block using that consonant.
+            BlockCompositionState::ExpectingNextBlock(_, _, _) => {
+                WordCompositionState::StartNewBlock(c)
+            }
+
+            // All other states cannot accept a composite vowel
+            _ => WordCompositionState::Invalid(c),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -202,13 +286,55 @@ mod tests {
     }
 
     #[test]
-    fn determine_hangul_rejects_compound_letters() {
-        let compound_letters = "ㄲㄸㅃㅆㅉㅘㅙㅚㅝㅞㅟㅢ";
+    fn determine_hangul_double_initials() {
+        let compound_letters = "ㄲㄸㅃㅆㅉ";
         for c in compound_letters.chars() {
             let result = determine_hangul(c);
             assert!(
-                result == Letter::NonHangul(c),
+                result == Letter::Hangul(HangulLetter::CompositeConsonant(c)),
                 "Failed on compound letter: {}; got result: {:?}",
+                c,
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn determine_hangul_composite_vowels() {
+        let compound_letters = "ㅘㅙㅚㅝㅞㅟㅢ";
+        for c in compound_letters.chars() {
+            let result = determine_hangul(c);
+            assert!(
+                result == Letter::Hangul(HangulLetter::CompositeVowel(c)),
+                "Failed on compound letter: {}; got result: {:?}",
+                c,
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn determine_hangul_composite_finals() {
+        let compound_letters = "ㄲㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ";
+        for c in compound_letters.chars() {
+            let result = determine_hangul(c);
+            assert!(
+                result == Letter::Hangul(HangulLetter::CompositeConsonant(c)),
+                "Failed on compound letter: {}; got result: {:?}",
+                c,
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn determine_hangul_non_hangul() {
+        let non_hangul_chars = "ABCxyz123!@# ";
+        for c in non_hangul_chars.chars() {
+            let result = determine_hangul(c);
+            assert!(
+                result == Letter::NonHangul(c),
+                "Failed on non-Hangul char: {}; got result: {:?}",
                 c,
                 result
             );
@@ -223,23 +349,25 @@ mod tests {
     }
 
     fn run_test_cases(cases: Vec<HangulWordComposerTestCase>) {
-        for case in cases {
+        for case in &cases {
             let mut composer = HangulWordComposer::new_word();
             let mut final_word_state = WordCompositionState::Composable;
-            for letter in case.input {
-                final_word_state = composer.push(letter);
+            for letter in &case.input {
+                final_word_state = composer.push(letter.clone());
             }
             assert_eq!(
                 final_word_state, case.expected_final_word_state,
-                "Final WORD state did not match expected."
+                "Final WORD state did not match expected. Composer: {:?}",
+                composer
             );
             assert_eq!(
                 composer.cur_block, case.expected_final_block_state,
-                "Final BLOCK state did not match expected."
+                "Final BLOCK state did not match expected. Composer: {:?}",
+                composer
             );
             assert_eq!(
                 composer.prev_blocks, case.expected_prev_blocks,
-                "Previous blocks did not match expected."
+                "Previous blocks did not match expected.",
             );
         }
     }
@@ -325,6 +453,37 @@ mod tests {
                     expected_final_block_state: BlockCompositionState::ExpectingNextBlock(
                         'ㄲ', 'ㅝ', 'ㅀ',
                     ),
+                    expected_prev_blocks: vec![],
+                },
+                HangulWordComposerTestCase {
+                    input: vec![
+                        HangulLetter::CompositeConsonant('ㅃ'),
+                        HangulLetter::Vowel('ㅣ'),
+                        HangulLetter::CompositeConsonant('ㄳ'),
+                    ],
+                    expected_final_word_state: WordCompositionState::Composable,
+                    expected_final_block_state: BlockCompositionState::ExpectingNextBlock(
+                        'ㅃ', 'ㅣ', 'ㄳ',
+                    ),
+                    expected_prev_blocks: vec![],
+                },
+                HangulWordComposerTestCase {
+                    input: vec![
+                        HangulLetter::Consonant('ㅈ'),
+                        HangulLetter::CompositeVowel('ㅚ'),
+                    ],
+                    expected_final_word_state: WordCompositionState::Composable,
+                    expected_final_block_state: BlockCompositionState::ExpectingFinal('ㅈ', 'ㅚ'),
+                    expected_prev_blocks: vec![],
+                },
+                HangulWordComposerTestCase {
+                    input: vec![
+                        HangulLetter::CompositeConsonant('ㅉ'),
+                        HangulLetter::CompositeVowel('ㅢ'),
+                        HangulLetter::CompositeConsonant('ㅃ'),
+                    ],
+                    expected_final_word_state: WordCompositionState::StartNewBlock('ㅃ'),
+                    expected_final_block_state: BlockCompositionState::ExpectingFinal('ㅉ', 'ㅢ'),
                     expected_prev_blocks: vec![],
                 },
             ];
