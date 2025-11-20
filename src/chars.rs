@@ -29,3 +29,16 @@ pub(crate) fn composite_final(c1: char, c2: char) -> Option<char> {
         _ => None,
     }
 }
+
+pub(crate) fn composite_vowel(v1: char, v2: char) -> Option<char> {
+    match (v1, v2) {
+        ('ㅗ', 'ㅏ') => Some('ㅘ'),
+        ('ㅗ', 'ㅐ') => Some('ㅙ'),
+        ('ㅗ', 'ㅣ') => Some('ㅚ'),
+        ('ㅜ', 'ㅓ') => Some('ㅝ'),
+        ('ㅜ', 'ㅔ') => Some('ㅞ'),
+        ('ㅜ', 'ㅣ') => Some('ㅟ'),
+        ('ㅡ', 'ㅣ') => Some('ㅢ'),
+        _ => None,
+    }
+}
