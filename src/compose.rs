@@ -2,21 +2,10 @@ use std::fmt::Debug;
 
 use crate::chars::*;
 
+#[derive(Debug)]
 struct HangulWordComposer {
     prev_blocks: Vec<HangulBlock>,
     cur_block: BlockCompositionState,
-}
-
-impl Debug for HangulWordComposer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HangulWordComposer")
-            .field(
-                "prev_blocks",
-                &hangul_blocks_vec_to_string(&self.prev_blocks),
-            )
-            .field("cur_block", &self.cur_block)
-            .finish()
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
