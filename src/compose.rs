@@ -67,6 +67,53 @@ impl HangulWordComposer {
         }
     }
 
+    pub fn start_new_block(&mut self, letter: HangulLetter) -> Result<(), String> {
+        match letter {
+            HangulLetter::Consonant(c) => {
+                self.complete_current_block()?;
+                self.cur_block = BlockCompositionState::ExpectingDoubleInitialOrVowel(c);
+                Ok(())
+            },
+            HangulLetter::CompositeConsonant(c) => {
+                if is_valid_double_initial(c) {
+                    self.complete_current_block()?;
+                    self.cur_block = BlockCompositionState::ExpectingVowel(c);
+                    Ok(())
+                } else {
+                    Err(format!("Cannot start new block with invalid initial consonant: {:?}", letter))
+                }
+            }
+            _ => Err(format!("Cannot start new block with non-consonant letter: {:?}", letter)),
+        }
+    }
+
+    fn complete_current_block(&mut self) -> Result<(), String> {
+        let (i, v, f) = match &self.cur_block {
+            BlockCompositionState::ExpectingNextBlock(i, v, f) => (Some(*i), Some(*v), Some(*f)),
+            BlockCompositionState::ExpectingCompositeFinalOrNextBlock(i, v, f) => {
+                (Some(*i), Some(*v), Some(*f))
+            }
+            BlockCompositionState::ExpectingFinal(i, v) => (Some(*i), Some(*v), None),
+            BlockCompositionState::ExpectingCompositeVowelOrFinal(i, v) => {
+                (Some(*i), Some(*v), None)
+            }
+            BlockCompositionState::ExpectingVowel(i) => (Some(*i), None, None),
+            BlockCompositionState::ExpectingDoubleInitialOrVowel(i) => (Some(*i), None, None),
+            BlockCompositionState::ExpectingInitial => (None, None, None),
+        };
+        if let (Some(initial), Some(vowel)) = (i, v) {
+            let block = HangulBlock {
+                initial,
+                vowel,
+                final_optional: f,
+            };
+            self.prev_blocks.push(block);
+            Ok(())
+        } else {
+            Err("Cannot complete current block: incomplete block state".to_string())
+        }
+    }
+
     fn push_consonant(&mut self, c: char) -> WordCompositionState {
         match self.cur_block {
             // First letter: accept initial consonant
@@ -542,5 +589,87 @@ mod tests {
                 },
             ];
         run_test_cases(test_cases);
+    }
+
+    #[test]
+    fn start_new_block_valid() {
+        let mut composer = HangulWordComposer::new_word();
+
+        assert_eq!(
+            composer.push(HangulLetter::Consonant('ㄱ')),
+            WordCompositionState::Composable
+        );
+        assert_eq!(
+            composer.push(HangulLetter::Vowel('ㅏ')),
+            WordCompositionState::Composable
+        );
+        assert_eq!(
+            composer.push(HangulLetter::Consonant('ㄴ')),
+            WordCompositionState::Composable,
+        );
+        assert_eq!(
+            composer.push(HangulLetter::Consonant('ㅇ')),
+            WordCompositionState::StartNewBlock('ㅇ'),
+        );
+        assert_eq!(
+            composer.start_new_block(HangulLetter::Consonant('ㅇ')),
+            Ok(())
+        );
+        assert_eq!(
+            composer.prev_blocks,
+            vec![
+                HangulBlock {
+                    initial: 'ㄱ',
+                    vowel: 'ㅏ',
+                    final_optional: Some('ㄴ'),
+                }
+            ]
+        );
+        assert_eq!(
+            composer.cur_block,
+            BlockCompositionState::ExpectingDoubleInitialOrVowel('ㅇ')
+        );
+        assert_eq!(
+            composer.push(HangulLetter::Vowel('ㅛ')),
+            WordCompositionState::Composable
+        );
+        assert_eq!(
+            composer.push(HangulLetter::CompositeConsonant('ㅉ')),
+            WordCompositionState::StartNewBlock('ㅉ')
+        );
+        assert_eq!(
+            composer.start_new_block(HangulLetter::CompositeConsonant('ㅉ')),
+            Ok(())
+        );
+        assert_eq!(
+            composer.prev_blocks,
+            vec![
+                HangulBlock {
+                    initial: 'ㄱ',
+                    vowel: 'ㅏ',
+                    final_optional: Some('ㄴ'),
+                },
+                HangulBlock {
+                    initial: 'ㅇ',
+                    vowel: 'ㅛ',
+                    final_optional: None,
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn start_new_block_invalid() {
+        let mut composer = HangulWordComposer::new_word();
+
+        assert_eq!(
+            composer.start_new_block(HangulLetter::Vowel('ㅏ')),
+            Err("Cannot start new block with non-consonant letter: Vowel('ㅏ')".to_string())
+        );
+        let _ = composer.push(HangulLetter::Consonant('ㄱ'));
+        assert_eq!(
+            composer.start_new_block(HangulLetter::CompositeVowel('ㅘ')),
+            Err("Cannot start new block with non-consonant letter: CompositeVowel('ㅘ')".to_string()) 
+        );
     }
 }

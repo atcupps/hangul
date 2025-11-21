@@ -112,13 +112,12 @@ impl HangulLetter {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct HangulBlock {
     pub initial: char,
     pub vowel: char,
     pub final_optional: Option<char>,
 }
-
 impl HangulBlock {
     // Extracts the composed Hangul syllable character from the block struct
     pub fn to_char(&self) -> char {
@@ -142,12 +141,6 @@ impl HangulBlock {
 
         // Unwrapping because this should only ever be called with valid Hangul
         std::char::from_u32(S_BASE + s_index).unwrap()
-    }
-}
-
-impl Debug for HangulBlock {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_char().to_string())
     }
 }
 
