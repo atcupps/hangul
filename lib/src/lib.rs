@@ -1,2 +1,2 @@
-mod chars;
-mod compose;
+pub mod chars;
+pub mod compose;

@@ -78,7 +78,8 @@ pub(crate) fn decompose_composite_vowel(c: char) -> Option<(char, char)> {
 
 /// Determines the type of Hangul letter for a given character.
 /// Does not work for archaic or non-standard jamo like ᅀ.
-pub(crate) fn determine_hangul(c: char) -> Letter {
+/// Classifies a character as Hangul jamo or non-Hangul.
+pub fn determine_hangul(c: char) -> Letter {
     return if CONSONANTS.contains(c) {
         Letter::Hangul(HangulLetter::Consonant(c))
     } else if VOWELS.contains(c) {
@@ -266,9 +267,8 @@ pub(crate) fn hangul_blocks_vec_to_string(blocks: &Vec<HangulBlock>) -> Result<S
             Err(codepoint) => {
                 return Err(format!(
                     "Failed to convert HangulBlock: {:?} to char. Invalid codepoint: U+{:X}",
-                    block,
-                    codepoint
-                ))
+                    block, codepoint
+                ));
             }
         }
     }
