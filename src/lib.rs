@@ -1,2 +1,2 @@
 mod chars;
-mod word_compose;
+mod compose;
