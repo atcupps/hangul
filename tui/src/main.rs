@@ -1,6 +1,6 @@
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use hangul::chars::{HangulLetter, Letter, determine_hangul};
+use hangul::jamo::{determine_hangul, Jamo, Character};
 use hangul::compose::{HangulWordComposer, PushResult};
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Style, Stylize};
@@ -75,8 +75,8 @@ impl App {
         };
 
         let letter = match determine_hangul(jamo_char) {
-            Letter::Hangul(l) => Some(l),
-            Letter::NonHangul(_) => None,
+            Character::Hangul(l) => Some(l),
+            Character::NonHangul(_) => None,
         };
 
         let result = self.composer.push_char(jamo_char);
@@ -135,7 +135,7 @@ fn map_key_to_jamo(key_char: char) -> Option<char> {
 
 fn handle_start_new_block(
     composer: &mut HangulWordComposer,
-    letter: Option<HangulLetter>,
+    letter: Option<Jamo>,
 ) -> String {
     match letter {
         Some(l) => match composer.start_new_block(l) {
@@ -148,7 +148,7 @@ fn handle_start_new_block(
 
 fn handle_pop_and_start_new_block(
     composer: &mut HangulWordComposer,
-    letter: Option<HangulLetter>,
+    letter: Option<Jamo>,
 ) -> String {
     match letter {
         Some(l) => match composer.pop_and_start_new_block(l) {
