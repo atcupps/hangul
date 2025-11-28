@@ -86,6 +86,30 @@ impl BlockComposer {
         }
     }
 
+    pub(crate) fn pop(&mut self) -> Option<HangulLetter> {
+        if let Some(c) = self.final_second.take() {
+            Some(HangulLetter::Consonant(c))
+        }
+        else if let Some(c) = self.final_first.take() {
+            Some(HangulLetter::Consonant(c))
+        }
+        else if let Some(c) = self.vowel_second.take() {
+            Some(HangulLetter::Vowel(c))
+        }
+        else if let Some(c) = self.vowel_first.take() {
+            Some(HangulLetter::Vowel(c))
+        }
+        else if let Some(c) = self.initial_second.take() {
+            Some(HangulLetter::Consonant(c))
+        }
+        else if let Some(c) = self.initial_first.take() {
+            Some(HangulLetter::Consonant(c))
+        }
+        else {
+            None
+        }
+    }
+
     pub(crate) fn pop_end_consonant(&mut self) -> Option<HangulLetter> {
         if let Some(c) = self.final_second.take() {
             Some(HangulLetter::Consonant(c))
@@ -311,6 +335,18 @@ impl BlockComposer {
             BlockCompletionStatus::Incomplete(c) => Ok(Some(c)),
         }
     }
+
+    pub(crate) fn from_composed_block(block: &HangulBlock) -> Result<Self, String> {
+        let mut result = BlockComposer::new();
+        let (i1, i2, v1, v2, f1, f2) = block.decomposed()?;
+        result.initial_first = i1;
+        result.initial_second = i2;
+        result.vowel_first = v1;
+        result.vowel_second = v2;
+        result.final_first = f1;
+        result.final_second = f2;
+        Ok(result)
+    }
 }
 
 impl HangulWordComposer {
@@ -330,6 +366,20 @@ impl HangulWordComposer {
 
     pub fn push(&mut self, letter: &HangulLetter) -> PushResult {
         self.cur_block.push(letter)
+    }
+
+    pub fn pop(&mut self) -> Result<Option<HangulLetter>, String> {
+        match self.cur_block.pop() {
+            Some(l) => Ok(Some(l)),
+            None => {
+                if let Some(last_block) = self.prev_blocks.pop() {
+                    self.cur_block = BlockComposer::from_composed_block(&last_block)?;
+                    Ok(self.cur_block.pop_end_consonant())
+                } else {
+                    Ok(None)
+                }
+            }
+        }
     }
 
     pub fn pop_and_start_new_block(&mut self, letter: HangulLetter) -> Result<(), String> {
@@ -765,5 +815,23 @@ mod tests {
 
         let result_string = composer.as_string().unwrap();
         assert_eq!(result_string, "ㅇ".to_string());
+    }
+
+    #[test]
+    fn test_deletions() {
+        let mut composer = HangulWordComposer::new();
+        assert_eq!(composer.push_char('ㅇ'), PushResult::Success);
+        assert_eq!(composer.push_char('ㅏ'), PushResult::Success);
+        assert_eq!(composer.push_char('ㄴ'), PushResult::Success);
+        assert_eq!(composer.push_char('ㄴ'), PushResult::StartNewBlockNoPop);
+        assert_eq!(composer.start_new_block(HangulLetter::Consonant('ㄴ')), Ok(()));
+        assert_eq!(composer.push_char('ㅕ'), PushResult::Success);
+
+        assert_eq!(composer.pop(), Ok(Some(HangulLetter::Vowel('ㅕ'))));
+        assert_eq!(composer.pop(), Ok(Some(HangulLetter::Consonant('ㄴ'))));
+        assert_eq!(composer.pop(), Ok(Some(HangulLetter::Consonant('ㄴ'))));
+        assert_eq!(composer.pop(), Ok(Some(HangulLetter::Vowel('ㅏ'))));
+        assert_eq!(composer.pop(), Ok(Some(HangulLetter::Consonant('ㅇ'))));
+        assert_eq!(composer.pop(), Ok(None));
     }
 }

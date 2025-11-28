@@ -1,3 +1,4 @@
+use core::prelude::v1;
 use std::fmt::Debug;
 
 /// Utilities and types for chars and char operations
@@ -31,6 +32,17 @@ pub(crate) fn consonant_doubles(c1: char, c2: char) -> Option<char> {
     }
 }
 
+pub(crate) fn decompose_composite_initial(c: char) -> Option<(char, char)> {
+    match c {
+        'ㄲ' => Some(('ㄱ', 'ㄱ')),
+        'ㄸ' => Some(('ㄷ', 'ㄷ')),
+        'ㅃ' => Some(('ㅂ', 'ㅂ')),
+        'ㅆ' => Some(('ㅅ', 'ㅅ')),
+        'ㅉ' => Some(('ㅈ', 'ㅈ')),
+        _ => None,
+    }
+}
+
 pub(crate) fn composite_final(c1: char, c2: char) -> Option<char> {
     match (c1, c2) {
         ('ㄱ', 'ㄱ') => Some('ㄲ'),
@@ -46,6 +58,25 @@ pub(crate) fn composite_final(c1: char, c2: char) -> Option<char> {
         ('ㄹ', 'ㅌ') => Some('ㄾ'),
         ('ㄹ', 'ㅍ') => Some('ㄿ'),
         ('ㄹ', 'ㅎ') => Some('ㅀ'),
+        _ => None,
+    }
+}
+
+pub(crate) fn decompose_composite_final(c: char) -> Option<(char, char)> {
+    match c {
+        'ㄲ' => Some(('ㄱ', 'ㄱ')),
+        'ㄵ' => Some(('ㄴ', 'ㅈ')),
+        'ㄺ' => Some(('ㄹ', 'ㄱ')),
+        'ㅄ' => Some(('ㅂ', 'ㅅ')),
+        'ㅆ' => Some(('ㅅ', 'ㅅ')),
+        'ㄳ' => Some(('ㄱ', 'ㅅ')),
+        'ㄶ' => Some(('ㄴ', 'ㅎ')),
+        'ㄻ' => Some(('ㄹ', 'ㅁ')),
+        'ㄼ' => Some(('ㄹ', 'ㅂ')),
+        'ㄽ' => Some(('ㄹ', 'ㅅ')),
+        'ㄾ' => Some(('ㄹ', 'ㅌ')),
+        'ㄿ' => Some(('ㄹ', 'ㅍ')),
+        'ㅀ' => Some(('ㄹ', 'ㅎ')),
         _ => None,
     }
 }
@@ -169,6 +200,25 @@ impl HangulBlock {
         } else {
             Err(S_BASE + s_index)
         }
+    }
+
+    pub fn decomposed(&self) -> Result<(Option<char>, Option<char>, Option<char>, Option<char>, Option<char>, Option<char>), String> {
+        let (i1, i2) = match decompose_composite_initial(self.initial) {
+            Some((a, b)) => (Some(a), Some(b)),
+            None => (Some(self.initial), None),
+        };
+        let (v1, v2) = match decompose_composite_vowel(self.vowel) {
+            Some((a, b)) => (Some(a), Some(b)),
+            None => (Some(self.vowel), None),
+        };
+        let (f1, f2) = match self.final_optional {
+            Some(c) => match decompose_composite_final(c) {
+                Some((a, b)) => (Some(a), Some(b)),
+                None => (Some(c), None),
+            }
+            None => (None, None),
+        };
+        Ok((i1, i2, v1, v2, f1, f2))
     }
 }
 
