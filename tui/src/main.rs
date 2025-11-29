@@ -1,8 +1,6 @@
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use hangul::jamo::{determine_hangul, Jamo, Character};
 use hangul::string::StringComposer;
-use hangul::word::{HangulWordComposer, WordPushResult};
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Style, Stylize};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph};

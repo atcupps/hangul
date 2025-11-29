@@ -47,6 +47,7 @@ impl StringComposer {
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
 
