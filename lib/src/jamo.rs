@@ -1,10 +1,24 @@
 // Jamo sets
-const CONSONANTS: &str = "ㅂㅈㄷㄱㅅㅁㄴㅇㄹㅎㅋㅌㅊㅍ";
-const COMPOSITE_CONSONANTS: &str = "ㄲㄸㅃㅆㅉㄵㄺㅄㄳㄶㄻㄼㄽㄾㄿㅀ";
-const INITIAL_COMPOSITE_CONSONANTS: &str = "ㄲㄸㅃㅆㅉ";
-const FINAL_COMPOSITE_CONSONANTS: &str = "ㄲㄵㄺㅄㅆㄳㄶㄻㄼㄽㄾㄿㅀ";
-const VOWELS: &str = "ㅛㅕㅑㅐㅔㅒㅖㅗㅓㅏㅣㅠㅜㅡ";
-const COMPOSITE_VOWELS: &str = "ㅘㅙㅚㅝㅞㅟㅢ";
+
+/// String containing all modern Hangul consonants.
+pub const CONSONANTS: &str = "ㅂㅈㄷㄱㅅㅁㄴㅇㄹㅎㅋㅌㅊㅍ";
+
+/// String containing all modern Hangul composite consonants.
+pub const COMPOSITE_CONSONANTS: &str = "ㄲㄸㅃㅆㅉㄵㄺㅄㄳㄶㄻㄼㄽㄾㄿㅀ";
+
+/// String containing all modern Hangul composite consonants that can be used
+/// as initial consonants.
+pub const INITIAL_COMPOSITE_CONSONANTS: &str = "ㄲㄸㅃㅆㅉ";
+
+/// String containing all modern Hangul composite consonants that can be used
+/// as final consonants.
+pub const FINAL_COMPOSITE_CONSONANTS: &str = "ㄲㄵㄺㅄㅆㄳㄶㄻㄼㄽㄾㄿㅀ";
+
+/// String containing all modern Hangul vowels.
+pub const VOWELS: &str = "ㅛㅕㅑㅐㅔㅒㅖㅗㅓㅏㅣㅠㅜㅡ";
+
+/// String containing all modern Hangul composite vowels.
+pub const COMPOSITE_VOWELS: &str = "ㅘㅙㅚㅝㅞㅟㅢ";
 
 // Jamo arithmetic
 pub(crate) const S_BASE: u32 = 0xAC00;
