@@ -108,8 +108,8 @@ impl HangulWordComposer {
     /// error occurred during the operation.
     pub fn pop(&mut self) -> Result<Option<Jamo>, String> {
         match self.cur_block.pop() {
-            BlockPopStatus::PoppedAndShouldContinue(l) => Ok(Some(l)),
-            BlockPopStatus::PoppedAndShouldRemove(l) => {
+            BlockPopStatus::PoppedAndNonEmpty(l) => Ok(Some(l)),
+            BlockPopStatus::PoppedAndEmpty(l) => {
                 self.prev_block_to_cur()?;
                 Ok(Some(l))
             }
