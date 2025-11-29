@@ -2,20 +2,58 @@ use std::fmt::Debug;
 
 use crate::{block::*, jamo::*};
 
+/// A composer for a single Hangul word, made up of multiple syllable blocks.
+/// The `HangulWordComposer` maintains a list of completed `HangulBlock`s and a
+/// `BlockComposer` for the current syllable block being composed.
+///
+/// **API:**
+/// ```rust
+/// use hangul::word::{HangulWordComposer, WordPushResult};
+/// use hangul::jamo::Jamo;
+/// 
+/// let mut composer = HangulWordComposer::new();
+/// 
+/// // Push characters to form Hangul syllables
+/// assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㅕ'), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
+/// 
+/// // Get the composed string
+/// let result = composer.as_string().unwrap();
+/// assert_eq!(result, "안녕".to_string());
+/// 
+/// // Popping characters removes jamo in reverse order
+/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Consonant('ㅇ')));
+/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Vowel('ㅕ')));
+/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Consonant('ㄴ')));
+/// assert_eq!(composer.as_string().unwrap(), "안".to_string());
+/// ```
 #[derive(Debug)]
 pub struct HangulWordComposer {
     prev_blocks: Vec<HangulBlock>,
     cur_block: BlockComposer,
 }
 
+/// The result of attempting to push a character into the `HangulWordComposer`.
 #[derive(Debug, PartialEq, Eq)]
 pub enum WordPushResult {
+    /// The character was successfully pushed and composition can continue.
     Continue,
+
+    /// The character could not be pushed because it would result in an invalid
+    /// Hangul syllable.
     InvalidHangul,
+
+    /// The character was not pushed because it is not a Hangul character.
     NonHangul,
 }
 
 impl HangulWordComposer {
+
+    /// Creates a new, empty `HangulWordComposer`.
     pub fn new() -> Self {
         HangulWordComposer {
             prev_blocks: Vec::new(),
@@ -23,6 +61,10 @@ impl HangulWordComposer {
         }
     }
 
+    /// Pushes a character into the `HangulWordComposer`.
+    /// Pushing appends to the current syllable block if that would make a
+    /// valid Hangul syllable; otherwise, it completes the current block and
+    /// creates a new block with the pushed character.
     pub fn push_char(&mut self, c: char) -> WordPushResult {
         match determine_hangul(c) {
             Character::Hangul(hl) => self.push(&hl),
@@ -30,6 +72,11 @@ impl HangulWordComposer {
         }
     }
 
+    /// Pushes a Jamo letter into the `HangulWordComposer`. Acts the same as
+    /// `push_char`, but takes a `Jamo` instead of a `char`.
+    /// Pushing appends to the current syllable block if that would make a
+    /// valid Hangul syllable; otherwise, it completes the current block and
+    /// creates a new block with the pushed character.
     pub fn push(&mut self, letter: &Jamo) -> WordPushResult {
         match self.cur_block.push(letter) {
             BlockPushResult::Success => WordPushResult::Continue,
@@ -50,6 +97,15 @@ impl HangulWordComposer {
         }
     }
 
+    /// Pops the last Jamo letter from the `HangulWordComposer`.
+    /// If the current syllable block has letters, it will remove the last
+    /// letter from it. If the current block is empty, it will set the last
+    /// completed block as the currently-active block and remove one Jamo
+    /// from it if possible.
+    /// 
+    /// Returns `Ok(Some(Jamo))` if a letter was successfully removed,
+    /// `Ok(None)` if there are no letters to remove, or `Err(String)` if an
+    /// error occurred during the operation.
     pub fn pop(&mut self) -> Result<Option<Jamo>, String> {
         match self.cur_block.pop() {
             BlockPopStatus::PoppedAndShouldContinue(l) => Ok(Some(l)),
@@ -104,6 +160,9 @@ impl HangulWordComposer {
         }
     }
 
+    /// Returns the composed string for the current Hangul word.
+    /// This includes all completed syllable blocks and the current block,
+    /// even if it is incomplete.
     pub fn as_string(&self) -> Result<String, String> {
         let mut result = hangul_blocks_vec_to_string(&self.prev_blocks)?;
         let cur_as_char = self.cur_block.block_as_string()?;
