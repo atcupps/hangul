@@ -10,9 +10,9 @@ use crate::{block::*, jamo::*};
 /// ```rust
 /// use hangul::word::{HangulWordComposer, WordPushResult};
 /// use hangul::jamo::Jamo;
-/// 
+///
 /// let mut composer = HangulWordComposer::new();
-/// 
+///
 /// // Push characters to form Hangul syllables
 /// assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
 /// assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
@@ -20,11 +20,11 @@ use crate::{block::*, jamo::*};
 /// assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
 /// assert_eq!(composer.push_char('ㅕ'), WordPushResult::Continue);
 /// assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-/// 
+///
 /// // Get the composed string
 /// let result = composer.as_string().unwrap();
 /// assert_eq!(result, "안녕".to_string());
-/// 
+///
 /// // Popping characters removes jamo in reverse order
 /// assert_eq!(composer.pop().unwrap(), Some(Jamo::Consonant('ㅇ')));
 /// assert_eq!(composer.pop().unwrap(), Some(Jamo::Vowel('ㅕ')));
@@ -52,7 +52,6 @@ pub enum WordPushResult {
 }
 
 impl HangulWordComposer {
-
     /// Creates a new, empty `HangulWordComposer`.
     pub fn new() -> Self {
         HangulWordComposer {
@@ -82,11 +81,9 @@ impl HangulWordComposer {
             BlockPushResult::Success => WordPushResult::Continue,
             BlockPushResult::InvalidHangul => WordPushResult::InvalidHangul,
             BlockPushResult::NonHangul => WordPushResult::NonHangul,
-            BlockPushResult::StartNewBlockNoPop => {
-                match self.start_new_block(letter.clone()) {
-                    Ok(_) => WordPushResult::Continue,
-                    Err(_) => WordPushResult::InvalidHangul,
-                }
+            BlockPushResult::StartNewBlockNoPop => match self.start_new_block(letter.clone()) {
+                Ok(_) => WordPushResult::Continue,
+                Err(_) => WordPushResult::InvalidHangul,
             },
             BlockPushResult::PopAndStartNewBlock => {
                 match self.pop_and_start_new_block(letter.clone()) {
@@ -102,7 +99,7 @@ impl HangulWordComposer {
     /// letter from it. If the current block is empty, it will set the last
     /// completed block as the currently-active block and remove one Jamo
     /// from it if possible.
-    /// 
+    ///
     /// Returns `Ok(Some(Jamo))` if a letter was successfully removed,
     /// `Ok(None)` if there are no letters to remove, or `Err(String)` if an
     /// error occurred during the operation.
@@ -199,9 +196,15 @@ mod tests {
     fn start_new_block_valid() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(composer.push(&Jamo::Consonant('ㄱ')), WordPushResult::Continue);
+        assert_eq!(
+            composer.push(&Jamo::Consonant('ㄱ')),
+            WordPushResult::Continue
+        );
         assert_eq!(composer.push(&Jamo::Vowel('ㅏ')), WordPushResult::Continue);
-        assert_eq!(composer.push(&Jamo::Consonant('ㄴ')), WordPushResult::Continue,);
+        assert_eq!(
+            composer.push(&Jamo::Consonant('ㄴ')),
+            WordPushResult::Continue,
+        );
         assert_eq!(
             composer.push(&Jamo::Consonant('ㅇ')),
             WordPushResult::Continue,

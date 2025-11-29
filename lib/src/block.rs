@@ -4,21 +4,21 @@ use std::fmt::Debug;
 /// A struct representing a composed Hangul syllable block,
 /// consisting of an initial character, a vowel character,
 /// and an optional final character.
-/// 
+///
 /// **API:**
 /// ```rust
 /// use hangul::block::HangulBlock;
-/// 
+///
 /// let block = HangulBlock {
 ///     initial: 'ㄱ',
 ///     vowel: 'ㅏ',
 ///     final_optional: None,
 /// };
-/// 
+///
 /// // Convert the block to a Hangul syllable character
 /// let syllable = block.to_char().unwrap();
 /// assert_eq!(syllable, '가');
-/// 
+///
 /// // Decompose the block into its constituent Jamo characters
 /// assert_eq!(
 ///     block.decomposed().unwrap(),
@@ -33,7 +33,6 @@ pub struct HangulBlock {
 }
 
 impl HangulBlock {
-    
     /// Converts the `HangulBlock` into a composed Hangul syllable unicode
     /// character. Assumes all chars are valid Jamo. If the block cannot be
     /// converted into a valid Hangul syllable, returns an `Err` with the
@@ -168,25 +167,25 @@ enum BlockCompositionState {
 
 /// A composer for a single Hangul syllable block. Used to build a block
 /// by pushing and popping Jamo letters.
-/// 
+///
 /// **API:**
 /// ```rust
 /// use hangul::block::{BlockComposer, BlockPushResult};
 /// use hangul::jamo::Jamo;
-/// 
+///
 /// let mut composer = BlockComposer::new();
-/// 
+///
 /// // Push letters to form the syllable '강'
 /// assert_eq!(composer.push(&Jamo::Consonant('ㄱ')), BlockPushResult::Success);
 /// assert_eq!(composer.push(&Jamo::Vowel('ㅏ')), BlockPushResult::Success);
 /// assert_eq!(composer.push(&Jamo::Consonant('ㅇ')), BlockPushResult::Success);
-/// 
+///
 /// // Try to push another character that would not fit in the current block
 /// assert_eq!(
 ///   composer.push(&Jamo::Vowel('ㅏ')),
 ///   BlockPushResult::PopAndStartNewBlock
 /// );
-/// 
+///
 /// // Get the composed block as a character
 /// let block_char = composer.block_as_string().unwrap();
 /// assert_eq!(block_char, Some('강'));
@@ -229,7 +228,6 @@ pub enum BlockPopStatus {
 }
 
 impl BlockComposer {
-
     /// Creates a new, empty `BlockComposer`.
     pub fn new() -> Self {
         BlockComposer {
@@ -268,16 +266,16 @@ impl BlockComposer {
     /// - `PoppedAndNonEmpty(Jamo)`: A Jamo letter was popped and the block still has letters remaining.
     /// - `PoppedAndEmpty(Jamo)`: A Jamo letter was popped and the block is now empty.
     /// - `None`: The block is already empty; no letters to pop.
-    /// 
+    ///
     /// **Example:**
     /// ```rust
     /// use hangul::block::{BlockComposer, BlockPopStatus};
     /// use hangul::jamo::Jamo;
-    /// 
+    ///
     /// let mut composer = BlockComposer::new();
     /// composer.push(&Jamo::Consonant('ㄱ'));
     /// composer.push(&Jamo::Vowel('ㅏ'));
-    /// 
+    ///
     /// assert_eq!(composer.pop(), BlockPopStatus::PoppedAndNonEmpty(Jamo::Vowel('ㅏ')));
     /// assert_eq!(composer.pop(), BlockPopStatus::PoppedAndEmpty(Jamo::Consonant('ㄱ')));
     /// assert_eq!(composer.pop(), BlockPopStatus::None);
@@ -492,24 +490,24 @@ impl BlockComposer {
     /// into a complete `HangulBlock`. If the block is incomplete,
     /// it returns an `Incomplete` status with the last Jamo character
     /// added. If the block is empty, it returns an `Empty` status.
-    /// 
+    ///
     /// **Example:**
     /// ```rust
     /// use hangul::block::{BlockComposer, BlockCompletionStatus, HangulBlock};
     /// use hangul::jamo::Jamo;
-    /// 
+    ///
     /// let mut composer = BlockComposer::new();
-    /// 
+    ///
     /// composer.push(&Jamo::Consonant('ㄱ'));
-    /// 
+    ///
     /// // Attempt to complete incomplete block
     /// assert_eq!(
     ///     composer.try_as_complete_block(),
     ///     Ok(BlockCompletionStatus::Incomplete('ㄱ'))
     /// );
-    /// 
+    ///
     /// composer.push(&Jamo::Vowel('ㅏ'));
-    /// 
+    ///
     /// // Get the complete block now that a vowel has been added
     /// assert_eq!(
     ///    composer.try_as_complete_block(),
@@ -554,12 +552,10 @@ impl BlockComposer {
             })),
             (Some(initial), None) => Ok(BlockCompletionStatus::Incomplete(initial)),
             (None, Some(vowel)) => Ok(BlockCompletionStatus::Incomplete(vowel)),
-            (None, None) => {
-                match final_optional {
-                    Some(f) => Ok(BlockCompletionStatus::Incomplete(f)),
-                    None => Ok(BlockCompletionStatus::Empty),
-                }
-            }
+            (None, None) => match final_optional {
+                Some(f) => Ok(BlockCompletionStatus::Incomplete(f)),
+                None => Ok(BlockCompletionStatus::Empty),
+            },
         }
     }
 
