@@ -126,6 +126,7 @@ pub struct BlockComposer {
 pub enum BlockCompletionStatus {
     Complete(HangulBlock),
     Incomplete(char),
+    Empty,
 }
 
 pub enum BlockPopStatus {
@@ -404,7 +405,10 @@ impl BlockComposer {
             (Some(initial), None) => Ok(BlockCompletionStatus::Incomplete(initial)),
             (None, Some(vowel)) => Ok(BlockCompletionStatus::Incomplete(vowel)),
             (None, None) => {
-                Err("Cannot form block: missing initial consonant and vowel".to_string())
+                match final_optional {
+                    Some(f) => Ok(BlockCompletionStatus::Incomplete(f)),
+                    None => Ok(BlockCompletionStatus::Empty),
+                }
             }
         }
     }
@@ -416,6 +420,7 @@ impl BlockComposer {
                 .map(Some)
                 .map_err(|e| format!("Error converting block to char: U+{:04X}", e)),
             BlockCompletionStatus::Incomplete(c) => Ok(Some(c)),
+            BlockCompletionStatus::Empty => Ok(None),
         }
     }
 

@@ -124,6 +124,10 @@ impl HangulWordComposer {
                 "Cannot complete current block: incomplete block state, leftover char: {}",
                 c
             )),
+            BlockCompletionStatus::Empty => {
+                // Nothing to complete
+                Ok(())
+            }
         }
     }
 }
@@ -179,7 +183,7 @@ mod tests {
 
         assert_eq!(
             composer.start_new_block(Jamo::Vowel('ㅏ')),
-            Err("Cannot form block: missing initial consonant and vowel".to_string())
+            Err("Error starting new block with letter: Vowel('ㅏ')".to_string())
         );
         let _ = composer.push(&Jamo::Consonant('ㄱ'));
         assert_eq!(
