@@ -15,7 +15,15 @@ pub(crate) const V_COUNT: u32 = 21;
 pub(crate) const T_COUNT: u32 = 28;
 pub(crate) const N_COUNT: u32 = V_COUNT * T_COUNT;
 
-pub(crate) fn create_composite_initial(c1: char, c2: char) -> Option<char> {
+/// Creates a composite initial consonant from two given initial consonants.
+/// Returns `None` if the combination is invalid.
+/// 
+/// **Example:**
+/// ```rust
+/// let composite = hangul::jamo::create_composite_initial('ㄱ', 'ㄱ');
+/// assert_eq!(composite, Some('ㄲ'));
+/// ```
+pub fn create_composite_initial(c1: char, c2: char) -> Option<char> {
     match (c1, c2) {
         ('ㄱ', 'ㄱ') => Some('ㄲ'),
         ('ㄷ', 'ㄷ') => Some('ㄸ'),
@@ -26,7 +34,15 @@ pub(crate) fn create_composite_initial(c1: char, c2: char) -> Option<char> {
     }
 }
 
-pub(crate) fn decompose_composite_initial(c: char) -> Option<(char, char)> {
+/// Decomposes a composite initial consonant into its constituent consonants.
+/// Returns `None` if the character is not a composite initial consonant.
+/// 
+/// **Example:**
+/// ```rust
+/// let decomposition = hangul::jamo::decompose_composite_initial('ㄲ');
+/// assert_eq!(decomposition, Some(('ㄱ', 'ㄱ')));
+/// ```
+pub fn decompose_composite_initial(c: char) -> Option<(char, char)> {
     match c {
         'ㄲ' => Some(('ㄱ', 'ㄱ')),
         'ㄸ' => Some(('ㄷ', 'ㄷ')),
@@ -37,7 +53,15 @@ pub(crate) fn decompose_composite_initial(c: char) -> Option<(char, char)> {
     }
 }
 
-pub(crate) fn create_composite_vowel(v1: char, v2: char) -> Option<char> {
+/// Creates a composite vowel from two given vowels.
+/// Returns `None` if the combination is invalid.
+/// 
+/// **Example:**
+/// ```rust
+/// let composite = hangul::jamo::create_composite_vowel('ㅗ', 'ㅏ');
+/// assert_eq!(composite, Some('ㅘ'));
+/// ```
+pub fn create_composite_vowel(v1: char, v2: char) -> Option<char> {
     match (v1, v2) {
         ('ㅗ', 'ㅏ') => Some('ㅘ'),
         ('ㅗ', 'ㅐ') => Some('ㅙ'),
@@ -50,7 +74,15 @@ pub(crate) fn create_composite_vowel(v1: char, v2: char) -> Option<char> {
     }
 }
 
-pub(crate) fn decompose_composite_vowel(c: char) -> Option<(char, char)> {
+/// Decomposes a composite vowel into its constituent vowels.
+/// Returns `None` if the character is not a composite vowel.
+/// 
+/// **Example:**
+/// ```rust
+/// let decomposition = hangul::jamo::decompose_composite_vowel('ㅘ');
+/// assert_eq!(decomposition, Some(('ㅗ', 'ㅏ')));
+/// ```
+pub fn decompose_composite_vowel(c: char) -> Option<(char, char)> {
     match c {
         'ㅘ' => Some(('ㅗ', 'ㅏ')),
         'ㅙ' => Some(('ㅗ', 'ㅐ')),
@@ -63,7 +95,15 @@ pub(crate) fn decompose_composite_vowel(c: char) -> Option<(char, char)> {
     }
 }
 
-pub(crate) fn create_composite_final(c1: char, c2: char) -> Option<char> {
+/// Creates a composite final consonant from two given final consonants.
+/// Returns `None` if the combination is invalid.
+/// 
+/// **Example:**
+/// ```rust
+/// let composite = hangul::jamo::create_composite_final('ㄱ', 'ㅅ');
+/// assert_eq!(composite, Some('ㄳ'));
+/// ```
+pub fn create_composite_final(c1: char, c2: char) -> Option<char> {
     match (c1, c2) {
         ('ㄱ', 'ㄱ') => Some('ㄲ'),
         ('ㄴ', 'ㅈ') => Some('ㄵ'),
@@ -82,7 +122,15 @@ pub(crate) fn create_composite_final(c1: char, c2: char) -> Option<char> {
     }
 }
 
-pub(crate) fn decompose_composite_final(c: char) -> Option<(char, char)> {
+/// Decomposes a composite final consonant into its constituent consonants.
+/// Returns `None` if the character is not a composite final consonant.
+/// 
+/// **Example:**
+/// ```rust
+/// let decomposition = hangul::jamo::decompose_composite_final('ㄳ');
+/// assert_eq!(decomposition, Some(('ㄱ', 'ㅅ')));
+/// ```
+pub fn decompose_composite_final(c: char) -> Option<(char, char)> {
     match c {
         'ㄲ' => Some(('ㄱ', 'ㄱ')),
         'ㄵ' => Some(('ㄴ', 'ㅈ')),
@@ -104,6 +152,41 @@ pub(crate) fn decompose_composite_final(c: char) -> Option<(char, char)> {
 /// Determines the type of Hangul letter for a given character.
 /// Does not work for archaic or non-standard jamo like ᅀ.
 /// Classifies a character as Hangul jamo or non-Hangul.
+/// 
+/// **Example:**
+/// ```rust
+/// use hangul::jamo::{determine_hangul, Character, Jamo};
+/// 
+/// // Valid Hangul consonant
+/// assert_eq!(
+///     determine_hangul('ㄱ'),
+///     Character::Hangul(Jamo::Consonant('ㄱ'))
+/// );
+/// 
+/// // Valid Hangul vowel
+/// assert_eq!(
+///     determine_hangul('ㅏ'),
+///     Character::Hangul(Jamo::Vowel('ㅏ'))
+/// );
+/// 
+/// // Valid composite consonant
+/// assert_eq!(
+///     determine_hangul('ㄲ'),
+///     Character::Hangul(Jamo::CompositeConsonant('ㄲ'))
+/// );
+/// 
+/// // Valid composite vowel
+/// assert_eq!(
+///     determine_hangul('ㅘ'),
+///     Character::Hangul(Jamo::CompositeVowel('ㅘ'))
+/// );
+/// 
+/// // Non-Hangul character
+/// assert_eq!(
+///     determine_hangul('A'),
+///     Character::NonHangul('A')
+/// );
+/// ```
 pub fn determine_hangul(c: char) -> Character {
     return if CONSONANTS.contains(c) {
         Character::Hangul(Jamo::Consonant(c))
@@ -126,6 +209,30 @@ pub(crate) fn is_valid_composite_final(c: char) -> bool {
     FINAL_COMPOSITE_CONSONANTS.contains(c)
 }
 
+/// Converts compatibility jamo to modern jamo, specifically for 
+/// initial consonants or initial composite consonants.
+/// 
+/// What are compatibility and modern jamo? In Unicode, Hangul jamo characteres
+/// are represented in two different blocks: the "Hangul Jamo" block (U+1100 to U+11FF)
+/// and the "Hangul Compatibility Jamo" block (U+3130 to U+318F).
+/// The former contains the modern jamo used for composing syllables, while the latter
+/// includes characters for compatibility with older standards and encodings.
+/// 
+/// As an example, both U+1100 and U+3131 represent the Hangul consonant "Giyeok" (ㄱ),
+/// but U+1100 is the modern jamo used in syllable composition, while
+/// U+3131 is the compatibility jamo.
+/// 
+/// In order to properly compose Hangul syllables as Unicode characters, it is
+/// necessary to convert any compatibility jamo into their modern equivalents.
+/// The math done to compose syllables in this crate relies on the use of
+/// modern Jamo. The APIs for converting `HangulBlock`s or composing blocks
+/// or words or strings in this crate automatically handle this conversion,
+/// but the function is provided for users who want to manually work with Jamo
+/// characters.
+/// 
+/// This function maps compatibility jamo characters to their modern equivalents.
+/// If the input character is not a compatibility jamo, it is returned unchanged
+/// (including if it is not a Hangul jamo at all).
 pub fn modernize_jamo_initial(c: char) -> char {
     match c {
         '\u{3131}' => '\u{1100}', // ㄱ
@@ -151,6 +258,30 @@ pub fn modernize_jamo_initial(c: char) -> char {
     }
 }
 
+/// Converts compatibility jamo to modern jamo, specifically for
+/// vowels or composite vowels.
+/// 
+/// What are compatibility and modern jamo? In Unicode, Hangul jamo characteres
+/// are represented in two different blocks: the "Hangul Jamo" block (U+1100 to U+11FF)
+/// and the "Hangul Compatibility Jamo" block (U+3130 to U+318F).
+/// The former contains the modern jamo used for composing syllables, while the latter
+/// includes characters for compatibility with older standards and encodings.
+/// 
+/// As an example, both U+1100 and U+3131 represent the Hangul consonant "Giyeok" (ㄱ),
+/// but U+1100 is the modern jamo used in syllable composition, while
+/// U+3131 is the compatibility jamo.
+/// 
+/// In order to properly compose Hangul syllables as Unicode characters, it is
+/// necessary to convert any compatibility jamo into their modern equivalents.
+/// The math done to compose syllables in this crate relies on the use of
+/// modern Jamo. The APIs for converting `HangulBlock`s or composing blocks
+/// or words or strings in this crate automatically handle this conversion,
+/// but the function is provided for users who want to manually work with Jamo
+/// characters.
+/// 
+/// This function maps compatibility jamo characters to their modern equivalents.
+/// If the input character is not a compatibility jamo, it is returned unchanged
+/// (including if it is not a Hangul jamo at all).
 pub fn modernize_jamo_vowel(c: char) -> char {
     match c {
         '\u{314F}' => '\u{1161}', // ㅏ
@@ -178,6 +309,30 @@ pub fn modernize_jamo_vowel(c: char) -> char {
     }
 }
 
+/// Converts compatibility jamo to modern jamo, specifically for
+/// final consonants or final composite consonants.
+/// 
+/// What are compatibility and modern jamo? In Unicode, Hangul jamo characteres
+/// are represented in two different blocks: the "Hangul Jamo" block (U+1100 to U+11FF)
+/// and the "Hangul Compatibility Jamo" block (U+3130 to U+318F).
+/// The former contains the modern jamo used for composing syllables, while the latter
+/// includes characters for compatibility with older standards and encodings.
+/// 
+/// As an example, both U+1100 and U+3131 represent the Hangul consonant "Giyeok" (ㄱ),
+/// but U+1100 is the modern jamo used in syllable composition, while
+/// U+3131 is the compatibility jamo.
+/// 
+/// In order to properly compose Hangul syllables as Unicode characters, it is
+/// necessary to convert any compatibility jamo into their modern equivalents.
+/// The math done to compose syllables in this crate relies on the use of
+/// modern Jamo. The APIs for converting `HangulBlock`s or composing blocks
+/// or words or strings in this crate automatically handle this conversion,
+/// but the function is provided for users who want to manually work with Jamo
+/// characters.
+/// 
+/// This function maps compatibility jamo characters to their modern equivalents.
+/// If the input character is not a compatibility jamo, it is returned unchanged
+/// (including if it is not a Hangul jamo at all).
 pub fn modernize_jamo_final(c: char) -> char {
     match c {
         '\u{3131}' => '\u{11A8}', // ㄱ
@@ -211,12 +366,16 @@ pub fn modernize_jamo_final(c: char) -> char {
     }
 }
 
+/// An enum representing either a Hangul Jamo character or a non-Hangul
+/// character.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Character {
     NonHangul(char),
     Hangul(Jamo),
 }
 
+/// An enum representing the different types of Hangul Jamo characters:
+/// consonants, composite consonants, vowels, and composite vowels.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Jamo {
     Consonant(char),
@@ -226,7 +385,15 @@ pub enum Jamo {
 }
 
 impl Jamo {
-    pub(crate) fn get_char(&self) -> char {
+    /// Returns the underlying character of the Jamo.
+    /// 
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::Jamo;
+    /// let jamo = Jamo::Consonant('ㄱ');
+    /// assert_eq!(jamo.get_char(), 'ㄱ');
+    /// ```
+    pub fn get_char(&self) -> char {
         match self {
             Jamo::Consonant(c)
             | Jamo::CompositeConsonant(c)
