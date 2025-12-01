@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum JamoUnicodeEra {
     Modern,
     Compatibility,
@@ -388,7 +389,15 @@ pub enum JamoConsonantSingular {
 }
 
 impl JamoConsonantSingular {
-    pub fn char_modern_initial(&self) -> char {
+    pub fn char_modern(&self, position: JamoPosition) -> Option<char> {
+        match position {
+            JamoPosition::Initial => Some(self.char_modern_initial()),
+            JamoPosition::Final => Some(self.char_modern_final()),
+            _ => None,
+        }
+    }
+
+    fn char_modern_initial(&self) -> char {
         match self {
             JamoConsonantSingular::Giyeok => '\u{1100}',
             JamoConsonantSingular::Nieun => '\u{1102}',
@@ -407,7 +416,7 @@ impl JamoConsonantSingular {
         }
     }
 
-    pub fn char_modern_final(&self) -> char {
+    fn char_modern_final(&self) -> char {
         match self {
             JamoConsonantSingular::Giyeok => '\u{11A8}',
             JamoConsonantSingular::Nieun => '\u{11AB}',
@@ -555,7 +564,15 @@ pub enum JamoConsonantComposite {
 }
 
 impl JamoConsonantComposite {
-    pub fn char_modern_initial(&self) -> Option<char> {
+    pub fn char_modern(&self, position: JamoPosition) -> Option<char> {
+        match position {
+            JamoPosition::Initial => self.char_modern_initial(),
+            JamoPosition::Final => self.char_modern_final(),
+            _ => None,
+        }
+    }
+
+    fn char_modern_initial(&self) -> Option<char> {
         match self {
             JamoConsonantComposite::SsangGiyeok => Some('\u{1101}'),
             JamoConsonantComposite::SsangDigeut => Some('\u{1104}'),
@@ -566,7 +583,7 @@ impl JamoConsonantComposite {
         }
     }
 
-    pub fn char_modern_final(&self) -> Option<char> {
+    fn char_modern_final(&self) -> Option<char> {
         match self {
             JamoConsonantComposite::GiyeokSiot => Some('\u{11AA}'),
             JamoConsonantComposite::NieunJieut => Some('\u{11AC}'),
@@ -868,6 +885,7 @@ impl JamoVowelComposite {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum JamoPosition {
     Initial,
     Vowel,
@@ -904,11 +922,7 @@ impl Jamo {
     /// ```
     pub fn char_modern(&self, position: JamoPosition) -> Option<char> {
         match self {
-            Jamo::Consonant(c) => match position {
-                JamoPosition::Initial => Some(c.char_modern_initial()),
-                JamoPosition::Final => Some(c.char_modern_final()),
-                JamoPosition::Vowel => None,
-            },
+            Jamo::Consonant(c) => c.char_modern(position),
             Jamo::CompositeConsonant(c) => match position {
                 JamoPosition::Initial => c.char_modern_initial(),
                 JamoPosition::Final => c.char_modern_final(),

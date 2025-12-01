@@ -1,5 +1,5 @@
 use crate::jamo::*;
-use std::fmt::Debug;
+use std::{fmt::Debug};
 
 /// A struct representing a composed Hangul syllable block,
 /// consisting of an initial character, a vowel character,
@@ -7,8 +7,13 @@ use std::fmt::Debug;
 ///
 /// **API:**
 /// ```rust
-/// use hangul::block::HangulBlock;
-/// use hangul::jamo::{Jamo, JamoConsonantSingular, JamoVowelSingular};
+/// use hangul::block::{HangulBlock, HangulBlockDecompositionOptions};
+/// use hangul::jamo::{
+///     Jamo,
+///     JamoConsonantSingular,
+///     JamoVowelSingular,
+///     JamoUnicodeEra,
+/// };
 ///
 /// let block = HangulBlock {
 ///     initial: Jamo::from_compatibility_jamo('ㄱ').unwrap(),
@@ -20,11 +25,18 @@ use std::fmt::Debug;
 /// let syllable = block.to_char().unwrap();
 /// assert_eq!(syllable, '가');
 ///
-/// // Decompose the block into its constituent Jamo characters
+/// // Decompose the block into its constituent Jamo characters as a tuple
 /// assert_eq!(
-///     block.decomposed().unwrap(),
-///    (Some(Jamo::Consonant(JamoConsonantSingular::Giyeok)), None, Some(Jamo::Vowel(JamoVowelSingular::A)), None, None, None)
-/// );
+///     block.decomposed_tuple().unwrap(),
+///    (Some(Jamo::Consonant(JamoConsonantSingular::Giyeok)), None, Some(Jamo::Vowel(JamoVowelSingular::A)), None, None, None));
+/// 
+/// // Decompose the block into its constituent Jamo characters as a vector
+/// let options = HangulBlockDecompositionOptions {
+///    decompose_composites: false,
+///    jamo_era: JamoUnicodeEra::Modern,
+/// };
+/// let decomposed_vec = block.decomposed_vec(&options).unwrap();
+/// assert_eq!(decomposed_vec, vec!['ᄀ', 'ᅡ']);
 /// ```
 #[derive(Debug, PartialEq, Eq)]
 pub struct HangulBlock {
@@ -125,7 +137,7 @@ impl HangulBlock {
     /// - Second vowel (if composite)
     /// - First final consonant (if any)
     /// - Second final consonant (if composite)
-    pub fn decomposed(
+    pub fn decomposed_tuple(
         &self,
     ) -> Result<
         (
@@ -164,6 +176,112 @@ impl HangulBlock {
 
         Ok((i1, i2, v1, v2, f1, f2))
     }
+
+    pub fn decomposed_vec(&self, options: &HangulBlockDecompositionOptions) -> Result<Vec<char>, String> {
+        let mut result = Vec::new();
+
+        match (&self.initial, &options.jamo_era) {
+            (Jamo::CompositeConsonant(c), JamoUnicodeEra::Modern) => {
+                if options.decompose_composites {
+                    let (a, b) = c.decompose();
+                    result.push(a.char_modern(JamoPosition::Initial).ok_or("Invalid initial Jamo")?);
+                    result.push(b.char_modern(JamoPosition::Initial).ok_or("Invalid initial Jamo")?);
+                } else {
+                    result.push(c.char_modern(JamoPosition::Initial).ok_or("Invalid initial Jamo")?);
+                }
+            },
+            (Jamo::CompositeConsonant(c), JamoUnicodeEra::Compatibility) => {
+                if options.decompose_composites {
+                    match c.decompose() {
+                        (a, b) => {
+                            result.push(a.char_compatibility());
+                            result.push(b.char_compatibility());
+                        }
+                    }
+                } else {
+                    result.push(c.char_compatibility());
+                }
+            },
+            (Jamo::Consonant(c), JamoUnicodeEra::Modern) => {
+                result.push(c.char_modern(JamoPosition::Initial).ok_or("Invalid initial Jamo")?);
+            },
+            (Jamo::Consonant(c), JamoUnicodeEra::Compatibility) => {
+                result.push(c.char_compatibility());
+            },
+            _ => return Err(format!("Invalid initial Jamo in HangulBlock: {:?}", self.initial)),
+        }
+
+        match (&self.vowel, &options.jamo_era) {
+            (Jamo::CompositeVowel(c), JamoUnicodeEra::Modern) => {
+                if options.decompose_composites {
+                    let (a, b) = c.decompose();
+                    result.push(a.char_modern(JamoPosition::Vowel).ok_or("Invalid vowel Jamo")?);
+                    result.push(b.char_modern(JamoPosition::Vowel).ok_or("Invalid vowel Jamo")?);
+                } else {
+                    result.push(c.char_modern());
+                }
+            },
+            (Jamo::CompositeVowel(c), JamoUnicodeEra::Compatibility) => {
+                if options.decompose_composites {
+                    match c.decompose() {
+                        (a, b) => {
+                            result.push(a.char_compatibility());
+                            result.push(b.char_compatibility());
+                        }
+                    }
+                } else {
+                    result.push(c.char_compatibility());
+                }
+            },
+            (Jamo::Vowel(c), JamoUnicodeEra::Modern) => {
+                result.push(c.char_modern());
+            },
+            (Jamo::Vowel(c), JamoUnicodeEra::Compatibility) => {
+                result.push(c.char_compatibility());
+            },
+            _ => return Err(format!("Invalid vowel Jamo in HangulBlock: {:?}", self.vowel)),
+        }
+
+        if let Some(final_jamo) = &self.final_optional {
+            match (&final_jamo, &options.jamo_era) {
+                (Jamo::CompositeConsonant(c), JamoUnicodeEra::Modern) => {
+                    if options.decompose_composites {
+                        let (a, b) = c.decompose();
+                        result.push(a.char_modern(JamoPosition::Final).ok_or("Invalid final Jamo")?);
+                        result.push(b.char_modern(JamoPosition::Final).ok_or("Invalid final Jamo")?);
+                    } else {
+                        result.push(c.char_modern(JamoPosition::Final).ok_or("Invalid final Jamo")?);
+                    }
+                },
+                (Jamo::CompositeConsonant(c), JamoUnicodeEra::Compatibility) => {
+                    if options.decompose_composites {
+                        match c.decompose() {
+                            (a, b) => {
+                                result.push(a.char_compatibility());
+                                result.push(b.char_compatibility());
+                            }
+                        }
+                    } else {
+                        result.push(c.char_compatibility());
+                    }
+                },
+                (Jamo::Consonant(c), JamoUnicodeEra::Modern) => {
+                    result.push(c.char_modern(JamoPosition::Final).ok_or("Invalid final Jamo")?);
+                },
+                (Jamo::Consonant(c), JamoUnicodeEra::Compatibility) => {
+                    result.push(c.char_compatibility());
+                },
+                _ => return Err(format!("Invalid final Jamo in HangulBlock: {:?}", final_jamo)),
+            }
+        }
+
+        Ok(result)
+    }
+}
+
+pub struct HangulBlockDecompositionOptions {
+    pub decompose_composites: bool,
+    pub jamo_era: JamoUnicodeEra,
 }
 
 /// Result of pushing a Jamo letter into a Hangul syllable block composer.
@@ -641,7 +759,7 @@ impl BlockComposer {
     /// Returns an error if decomposition fails.
     pub fn from_composed_block(block: &HangulBlock) -> Result<Self, String> {
         let mut result = BlockComposer::new();
-        let (i1, i2, v1, v2, f1, f2) = block.decomposed()?;
+        let (i1, i2, v1, v2, f1, f2) = block.decomposed_tuple()?;
 
         if f2.is_some() {
             result.state = BlockCompositionState::ExpectingNextBlock;
@@ -1046,5 +1164,31 @@ mod tests {
         for tuple in case_tuples {
             run_e2e_test_cases(BlockE2ETestCase(tuple));
         }
+    }
+
+    #[test]
+    fn test_decompose_vec_decompose_composites() {
+        let block = HangulBlock::from_char('값').unwrap();
+        let options = HangulBlockDecompositionOptions {
+            decompose_composites: true,
+            jamo_era: JamoUnicodeEra::Modern,
+        };
+
+        let decomposed = block.decomposed_vec(&options).unwrap();
+        let expected = vec!['ᄀ', 'ᅡ', 'ᆸ', 'ᆺ'];
+        assert_eq!(decomposed, expected);
+    }
+
+    #[test]
+    fn test_decompose_vec_no_decompose_composites() {
+        let block = HangulBlock::from_char('값').unwrap();
+        let options = HangulBlockDecompositionOptions {
+            decompose_composites: false,
+            jamo_era: JamoUnicodeEra::Compatibility,
+        };
+
+        let decomposed = block.decomposed_vec(&options).unwrap();
+        let expected = vec!['ㄱ', 'ㅏ', 'ㅄ'];
+        assert_eq!(decomposed, expected);
     }
 }
