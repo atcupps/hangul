@@ -1,4 +1,7 @@
-use crate::{jamo::{Jamo, JamoPosition}, word::*};
+use crate::{
+    jamo::{Jamo, JamoPosition},
+    word::*,
+};
 
 /// A composer struct that manages the composition of strings of text
 /// consisting of multiple words, including both Hangul words and non-Hangul

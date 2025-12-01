@@ -199,19 +199,10 @@ mod tests {
     fn start_new_block_valid() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(
-            composer.push_char('ㄱ'),
-            Ok(WordPushResult::Continue)
-        );
+        assert_eq!(composer.push_char('ㄱ'), Ok(WordPushResult::Continue));
         assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
-        assert_eq!(
-            composer.push_char('ㄴ'),
-            Ok(WordPushResult::Continue),
-        );
-        assert_eq!(
-            composer.push_char('ㅇ'),
-            Ok(WordPushResult::Continue),
-        );
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue),);
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue),);
         assert_eq!(
             composer.prev_blocks,
             vec![HangulBlock {
@@ -221,10 +212,7 @@ mod tests {
             }]
         );
         assert_eq!(composer.push_char('ㅛ'), Ok(WordPushResult::Continue));
-        assert_eq!(
-            composer.push_char('ㅉ'),
-            Ok(WordPushResult::Continue),
-        );
+        assert_eq!(composer.push_char('ㅉ'), Ok(WordPushResult::Continue),);
         assert_eq!(
             composer.prev_blocks,
             vec![
@@ -248,7 +236,10 @@ mod tests {
 
         assert_eq!(
             composer.start_new_block(Jamo::Vowel(JamoVowelSingular::A)),
-            Err("Error starting new block with letter: Vowel(A); got result: InvalidHangul".to_string())
+            Err(
+                "Error starting new block with letter: Vowel(A); got result: InvalidHangul"
+                    .to_string()
+            )
         );
         let _ = composer.push_char('ㄱ');
         assert_eq!(
