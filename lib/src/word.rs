@@ -64,10 +64,10 @@ impl HangulWordComposer {
     /// Pushing appends to the current syllable block if that would make a
     /// valid Hangul syllable; otherwise, it completes the current block and
     /// creates a new block with the pushed character.
-    pub fn push_char(&mut self, c: char) -> WordPushResult {
-        match Character::from_char(c) {
-            Character::Hangul(hl) => self.push(&hl),
-            Character::NonHangul(_) => WordPushResult::NonHangul,
+    pub fn push_char(&mut self, c: char) -> Result<WordPushResult, String> {
+        match Character::from_char(c)? {
+            Character::Hangul(jamo) => self.push(&jamo),
+            Character::NonHangul(_) => Ok(WordPushResult::NonHangul),
         }
     }
 
@@ -76,19 +76,19 @@ impl HangulWordComposer {
     /// Pushing appends to the current syllable block if that would make a
     /// valid Hangul syllable; otherwise, it completes the current block and
     /// creates a new block with the pushed character.
-    pub fn push(&mut self, letter: &Jamo) -> WordPushResult {
+    pub fn push(&mut self, letter: &Jamo) -> Result<WordPushResult, String> {
         match self.cur_block.push(letter) {
-            BlockPushResult::Success => WordPushResult::Continue,
-            BlockPushResult::InvalidHangul => WordPushResult::InvalidHangul,
-            BlockPushResult::NonHangul => WordPushResult::NonHangul,
+            BlockPushResult::Success => Ok(WordPushResult::Continue),
+            BlockPushResult::InvalidHangul => Ok(WordPushResult::InvalidHangul),
+            BlockPushResult::NonHangul => Ok(WordPushResult::NonHangul),
             BlockPushResult::StartNewBlockNoPop => match self.start_new_block(letter.clone()) {
-                Ok(_) => WordPushResult::Continue,
-                Err(_) => WordPushResult::InvalidHangul,
+                Ok(_) => Ok(WordPushResult::Continue),
+                Err(e) => Err(e),
             },
             BlockPushResult::PopAndStartNewBlock => {
                 match self.pop_and_start_new_block(letter.clone()) {
-                    Ok(_) => WordPushResult::Continue,
-                    Err(_) => WordPushResult::InvalidHangul,
+                    Ok(_) => Ok(WordPushResult::Continue),
+                    Err(e) => Err(e),
                 }
             }
         }
@@ -133,9 +133,9 @@ impl HangulWordComposer {
                 self.cur_block.push(&l);
                 match self.cur_block.push(&letter) {
                     BlockPushResult::Success => Ok(()),
-                    _ => Err(format!(
-                        "Error starting new block with letter: {:?}",
-                        letter
+                    other => Err(format!(
+                        "Error starting new block with letter: {:?}; got result: {:?}",
+                        letter, other
                     )),
                 }
             }
@@ -150,9 +150,9 @@ impl HangulWordComposer {
         self.complete_current_block()?;
         match self.cur_block.push(&letter) {
             BlockPushResult::Success => Ok(()),
-            _ => Err(format!(
-                "Error starting new block with letter: {:?}",
-                letter
+            other => Err(format!(
+                "Error starting new block with letter: {:?}; got result: {:?}",
+                letter, other
             )),
         }
     }
@@ -177,8 +177,11 @@ impl HangulWordComposer {
                 Ok(())
             }
             BlockCompletionStatus::Incomplete(c) => Err(format!(
-                "Cannot complete current block: incomplete block state, leftover char: {}",
-                c
+                "Cannot complete current block: incomplete block state, leftover char: {:?}",
+                c.char_modern(match c {
+                    Jamo::Consonant(_) | Jamo::CompositeConsonant(_) => JamoPosition::Initial,
+                    Jamo::Vowel(_) | Jamo::CompositeVowel(_) => JamoPosition::Vowel,
+                })
             )),
             BlockCompletionStatus::Empty => {
                 // Nothing to complete
@@ -197,42 +200,42 @@ mod tests {
         let mut composer = HangulWordComposer::new();
 
         assert_eq!(
-            composer.push(&Jamo::Consonant('ㄱ')),
-            WordPushResult::Continue
+            composer.push_char('ㄱ'),
+            Ok(WordPushResult::Continue)
         );
-        assert_eq!(composer.push(&Jamo::Vowel('ㅏ')), WordPushResult::Continue);
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
         assert_eq!(
-            composer.push(&Jamo::Consonant('ㄴ')),
-            WordPushResult::Continue,
+            composer.push_char('ㄴ'),
+            Ok(WordPushResult::Continue),
         );
         assert_eq!(
-            composer.push(&Jamo::Consonant('ㅇ')),
-            WordPushResult::Continue,
+            composer.push_char('ㅇ'),
+            Ok(WordPushResult::Continue),
         );
         assert_eq!(
             composer.prev_blocks,
             vec![HangulBlock {
-                initial: 'ㄱ',
-                vowel: 'ㅏ',
-                final_optional: Some('ㄴ'),
+                initial: Jamo::Consonant(JamoConsonantSingular::Giyeok),
+                vowel: Jamo::Vowel(JamoVowelSingular::A),
+                final_optional: Some(Jamo::Consonant(JamoConsonantSingular::Nieun)),
             }]
         );
-        assert_eq!(composer.push(&Jamo::Vowel('ㅛ')), WordPushResult::Continue);
+        assert_eq!(composer.push_char('ㅛ'), Ok(WordPushResult::Continue));
         assert_eq!(
-            composer.push(&Jamo::CompositeConsonant('ㅉ')),
-            WordPushResult::Continue,
+            composer.push_char('ㅉ'),
+            Ok(WordPushResult::Continue),
         );
         assert_eq!(
             composer.prev_blocks,
             vec![
                 HangulBlock {
-                    initial: 'ㄱ',
-                    vowel: 'ㅏ',
-                    final_optional: Some('ㄴ'),
+                    initial: Jamo::Consonant(JamoConsonantSingular::Giyeok),
+                    vowel: Jamo::Vowel(JamoVowelSingular::A),
+                    final_optional: Some(Jamo::Consonant(JamoConsonantSingular::Nieun)),
                 },
                 HangulBlock {
-                    initial: 'ㅇ',
-                    vowel: 'ㅛ',
+                    initial: Jamo::Consonant(JamoConsonantSingular::Ieung),
+                    vowel: Jamo::Vowel(JamoVowelSingular::Yo),
                     final_optional: None,
                 }
             ]
@@ -244,14 +247,14 @@ mod tests {
         let mut composer = HangulWordComposer::new();
 
         assert_eq!(
-            composer.start_new_block(Jamo::Vowel('ㅏ')),
-            Err("Error starting new block with letter: Vowel('ㅏ')".to_string())
+            composer.start_new_block(Jamo::Vowel(JamoVowelSingular::A)),
+            Err("Error starting new block with letter: Vowel(A); got result: InvalidHangul".to_string())
         );
-        let _ = composer.push(&Jamo::Consonant('ㄱ'));
+        let _ = composer.push_char('ㄱ');
         assert_eq!(
-            composer.start_new_block(Jamo::CompositeVowel('ㅘ')),
+            composer.start_new_block(Jamo::CompositeVowel(JamoVowelComposite::Wae)),
             Err(
-                "Cannot complete current block: incomplete block state, leftover char: ㄱ"
+                "Cannot complete current block: incomplete block state, leftover char: Some('ᄀ')"
                     .to_string()
             )
         );
@@ -261,56 +264,56 @@ mod tests {
     fn push_char_valid() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(composer.push_char('ㄱ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue,);
+        assert_eq!(composer.push_char('ㄱ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue),);
     }
 
     #[test]
     fn push_char_invalid_hangul() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(composer.push_char('ㄱ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄹ'), WordPushResult::Continue,);
-        assert_eq!(composer.push_char('ㄽ'), WordPushResult::InvalidHangul,);
+        assert_eq!(composer.push_char('ㄱ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄹ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄽ'), Ok(WordPushResult::InvalidHangul));
     }
 
     #[test]
     fn push_char_next_block() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(composer.push_char('ㄱ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue,);
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue,);
+        assert_eq!(composer.push_char('ㄱ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
     }
 
     #[test]
     fn push_char_non_hangul() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(composer.push_char('ㄱ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('A'), WordPushResult::NonHangul,);
+        assert_eq!(composer.push_char('ㄱ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('A'), Ok(WordPushResult::NonHangul));
     }
 
     #[test]
     fn test_single_word_안녕하세요_as_string() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅕ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅎ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅅ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅔ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅛ'), WordPushResult::Continue);
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅕ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅎ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅅ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅔ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅛ'), Ok(WordPushResult::Continue));
 
         let result_string = composer.as_string().unwrap();
         assert_eq!(result_string, "안녕하세요".to_string());
@@ -320,14 +323,14 @@ mod tests {
     fn test_single_word_앖어요_as_string() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅓ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅂ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅅ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅓ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅛ'), WordPushResult::Continue);
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅓ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅂ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅅ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅓ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅛ'), Ok(WordPushResult::Continue));
 
         let result_string = composer.as_string().unwrap();
         assert_eq!(result_string, "없어요".to_string());
@@ -337,43 +340,42 @@ mod tests {
     fn test_incomplete_block_as_string() {
         let mut composer = HangulWordComposer::new();
 
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
 
         let result_string = composer.as_string().unwrap();
-        assert_eq!(result_string, "ㅇ".to_string());
+        assert_eq!(result_string, "ᄋ".to_string());
     }
 
     #[test]
     fn test_deletions() {
         let mut composer = HangulWordComposer::new();
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅕ'), WordPushResult::Continue);
-
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Vowel('ㅕ'))));
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Consonant('ㄴ'))));
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Consonant('ㄴ'))));
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Vowel('ㅏ'))));
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Consonant('ㅇ'))));
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅕ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㅕ');
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㄴ');
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㄴ');
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㅏ');
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㅇ');
         assert_eq!(composer.pop(), Ok(None));
     }
 
     #[test]
     fn test_deletion_then_write_again() {
         let mut composer = HangulWordComposer::new();
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
 
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Consonant('ㄴ'))));
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Vowel('ㅏ'))));
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Consonant('ㅇ'))));
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㄴ');
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㅏ');
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㅇ');
 
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
 
         let result_string = composer.as_string().unwrap();
         assert_eq!(result_string, "안".to_string());
@@ -382,13 +384,29 @@ mod tests {
     #[test]
     fn deletion_removes_empty_block() {
         let mut composer = HangulWordComposer::new();
-        assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
-        assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
 
-        assert_eq!(composer.pop(), Ok(Some(Jamo::Consonant('ㄴ'))));
+        assert_eq!(composer.pop().unwrap().unwrap().char_compatibility(), 'ㄴ');
         // if current block is still empty, as_string should fail
         assert_eq!(composer.as_string().unwrap(), "안".to_string());
+    }
+
+    #[test]
+    fn test_complete_current_block() {
+        let mut composer = HangulWordComposer::new();
+        assert_eq!(composer.push_char('ㅇ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㅏ'), Ok(WordPushResult::Continue));
+        assert_eq!(composer.push_char('ㄴ'), Ok(WordPushResult::Continue));
+
+        assert!(composer.complete_current_block().is_ok());
+
+        assert_eq!(composer.prev_blocks.len(), 1);
+        assert_eq!(composer.cur_block, BlockComposer::new());
+
+        let result_string = composer.as_string().unwrap();
+        assert_eq!(result_string, "안".to_string());
     }
 }

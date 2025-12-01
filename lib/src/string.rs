@@ -1,4 +1,4 @@
-use crate::word::*;
+use crate::{jamo::{Jamo, JamoPosition}, word::*};
 
 /// A composer struct that manages the composition of strings of text
 /// consisting of multiple words, including both Hangul words and non-Hangul
@@ -66,7 +66,7 @@ impl StringComposer {
     /// If the character is part of a Hangul word, it will be composed into syllables.
     /// Otherwise, it will be added directly to the completed string.
     pub fn push_char(&mut self, c: char) -> Result<(), String> {
-        match self.current.push_char(c) {
+        match self.current.push_char(c)? {
             WordPushResult::Continue => Ok(()),
             _ => self.handle_invalid_input(c),
         }
@@ -88,7 +88,10 @@ impl StringComposer {
     /// remove the last character from the completed string.
     pub fn pop(&mut self) -> Result<Option<char>, String> {
         match self.current.pop()? {
-            Some(c) => Ok(Some(c.get_char())),
+            Some(c) => Ok(c.char_modern(match c {
+                Jamo::Consonant(_) | Jamo::CompositeConsonant(_) => JamoPosition::Initial,
+                Jamo::Vowel(_) | Jamo::CompositeVowel(_) => JamoPosition::Vowel,
+            })),
             None => match self.completed.pop() {
                 Some(c) => Ok(Some(c)),
                 None => Ok(None),
