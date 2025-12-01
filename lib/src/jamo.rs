@@ -286,35 +286,35 @@ impl Character {
     ///
     /// **Example:**
     /// ```rust
-    /// use hangul::jamo::{Character, Jamo};
+    /// use hangul::jamo::{Character, Jamo, JamoConsonantSingular, JamoVowelSingular, JamoVowelComposite, JamoConsonantComposite};
     ///
     /// // Valid Hangul consonant
     /// assert_eq!(
-    ///     Character::from_char('ㄱ'),
-    ///     Character::Hangul(Jamo::Consonant('ㄱ'))
+    ///     Character::from_char('ㄱ').unwrap(),
+    ///     Character::Hangul(Jamo::Consonant(JamoConsonantSingular::Giyeok))
     /// );
     ///
     /// // Valid Hangul vowel
     /// assert_eq!(
-    ///     Character::from_char('ㅏ'),
-    ///     Character::Hangul(Jamo::Vowel('ㅏ'))
+    ///     Character::from_char('ㅏ').unwrap(),
+    ///     Character::Hangul(Jamo::Vowel(JamoVowelSingular::A))
     /// );
     ///
     /// // Valid composite consonant
     /// assert_eq!(
-    ///     Character::from_char('ㄲ'),
-    ///     Character::Hangul(Jamo::CompositeConsonant('ㄲ'))
+    ///     Character::from_char('ㄲ').unwrap(),
+    ///     Character::Hangul(Jamo::CompositeConsonant(JamoConsonantComposite::GiyeokGiyeok))
     /// );
     ///
     /// // Valid composite vowel
     /// assert_eq!(
-    ///     Character::from_char('ㅘ'),
-    ///     Character::Hangul(Jamo::CompositeVowel('ㅘ'))
+    ///     Character::from_char('ㅘ').unwrap(),
+    ///     Character::Hangul(Jamo::CompositeVowel(JamoVowelComposite::Wa))
     /// );
     ///
     /// // Non-Hangul character
     /// assert_eq!(
-    ///     Character::from_char('A'),
+    ///     Character::from_char('A').unwrap(),
     ///     Character::NonHangul('A')
     /// );
     /// ```
@@ -835,8 +835,8 @@ impl Jamo {
     ///
     /// **Example:**
     /// ```rust
-    /// use hangul::jamo::Jamo;
-    /// let jamo = Jamo::Consonant('ㄱ');
+    /// use hangul::jamo::{Jamo, JamoConsonantSingular};
+    /// let jamo = Jamo::Consonant(JamoConsonantSingular::Giyeok);
     /// assert_eq!(jamo.char_compatibility(), 'ㄱ');
     /// ```
     pub fn char_compatibility(&self) -> char {
@@ -853,9 +853,9 @@ impl Jamo {
     ///
     /// **Example:**
     /// ```rust
-    /// use hangul::jamo::Jamo;
-    /// let jamo = Jamo::Consonant('ㄱ');
-    /// assert_eq!(jamo.char_modern(), 'ㄱ');
+    /// use hangul::jamo::{Jamo, JamoConsonantSingular, JamoPosition};
+    /// let jamo = Jamo::Consonant(JamoConsonantSingular::Giyeok);
+    /// assert_eq!(jamo.char_modern(JamoPosition::Initial), Some('ᄀ'));
     /// ```
     pub fn char_modern(&self, position: JamoPosition) -> Option<char> {
         match self {

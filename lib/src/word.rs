@@ -9,26 +9,26 @@ use crate::{block::*, jamo::*};
 /// **API:**
 /// ```rust
 /// use hangul::word::{HangulWordComposer, WordPushResult};
-/// use hangul::jamo::Jamo;
+/// use hangul::jamo::{Jamo, JamoConsonantSingular, JamoVowelSingular};
 ///
 /// let mut composer = HangulWordComposer::new();
 ///
 /// // Push characters to form Hangul syllables
-/// assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
-/// assert_eq!(composer.push_char('ㅏ'), WordPushResult::Continue);
-/// assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
-/// assert_eq!(composer.push_char('ㄴ'), WordPushResult::Continue);
-/// assert_eq!(composer.push_char('ㅕ'), WordPushResult::Continue);
-/// assert_eq!(composer.push_char('ㅇ'), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㅇ').unwrap(), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㅏ').unwrap(), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㄴ').unwrap(), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㄴ').unwrap(), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㅕ').unwrap(), WordPushResult::Continue);
+/// assert_eq!(composer.push_char('ㅇ').unwrap(), WordPushResult::Continue);
 ///
 /// // Get the composed string
 /// let result = composer.as_string().unwrap();
 /// assert_eq!(result, "안녕".to_string());
 ///
 /// // Popping characters removes jamo in reverse order
-/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Consonant('ㅇ')));
-/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Vowel('ㅕ')));
-/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Consonant('ㄴ')));
+/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Consonant(JamoConsonantSingular::Ieung)));
+/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Vowel(JamoVowelSingular::Yeo)));
+/// assert_eq!(composer.pop().unwrap(), Some(Jamo::Consonant(JamoConsonantSingular::Nieun)));
 /// assert_eq!(composer.as_string().unwrap(), "안".to_string());
 /// ```
 #[derive(Debug)]

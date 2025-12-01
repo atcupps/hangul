@@ -8,10 +8,11 @@ use std::fmt::Debug;
 /// **API:**
 /// ```rust
 /// use hangul::block::HangulBlock;
+/// use hangul::jamo::{Jamo, JamoConsonantSingular, JamoVowelSingular};
 ///
 /// let block = HangulBlock {
-///     initial: 'ㄱ',
-///     vowel: 'ㅏ',
+///     initial: Jamo::from_compatibility_jamo('ㄱ').unwrap(),
+///     vowel: Jamo::from_compatibility_jamo('ㅏ').unwrap(),
 ///     final_optional: None,
 /// };
 ///
@@ -22,7 +23,7 @@ use std::fmt::Debug;
 /// // Decompose the block into its constituent Jamo characters
 /// assert_eq!(
 ///     block.decomposed().unwrap(),
-///    (Some('ㄱ'), None, Some('ㅏ'), None, None, None)
+///    (Some(Jamo::Consonant(JamoConsonantSingular::Giyeok)), None, Some(Jamo::Vowel(JamoVowelSingular::A)), None, None, None)
 /// );
 /// ```
 #[derive(Debug, PartialEq, Eq)]
@@ -186,18 +187,18 @@ enum BlockCompositionState {
 /// **API:**
 /// ```rust
 /// use hangul::block::{BlockComposer, BlockPushResult};
-/// use hangul::jamo::Jamo;
+/// use hangul::jamo::{Jamo, JamoConsonantSingular, JamoVowelSingular};
 ///
 /// let mut composer = BlockComposer::new();
 ///
 /// // Push letters to form the syllable '강'
-/// assert_eq!(composer.push(&Jamo::Consonant('ㄱ')), BlockPushResult::Success);
-/// assert_eq!(composer.push(&Jamo::Vowel('ㅏ')), BlockPushResult::Success);
-/// assert_eq!(composer.push(&Jamo::Consonant('ㅇ')), BlockPushResult::Success);
+/// assert_eq!(composer.push(&Jamo::Consonant(JamoConsonantSingular::Giyeok)), BlockPushResult::Success);
+/// assert_eq!(composer.push(&Jamo::Vowel(JamoVowelSingular::A)), BlockPushResult::Success);
+/// assert_eq!(composer.push(&Jamo::Consonant(JamoConsonantSingular::Ieung)), BlockPushResult::Success);
 ///
 /// // Try to push another character that would not fit in the current block
 /// assert_eq!(
-///   composer.push(&Jamo::Vowel('ㅏ')),
+///   composer.push(&Jamo::Vowel(JamoVowelSingular::A)),
 ///   BlockPushResult::PopAndStartNewBlock
 /// );
 ///
@@ -285,14 +286,14 @@ impl BlockComposer {
     /// **Example:**
     /// ```rust
     /// use hangul::block::{BlockComposer, BlockPopStatus};
-    /// use hangul::jamo::Jamo;
+    /// use hangul::jamo::{Jamo, JamoConsonantSingular, JamoVowelSingular};
     ///
     /// let mut composer = BlockComposer::new();
-    /// composer.push(&Jamo::Consonant('ㄱ'));
-    /// composer.push(&Jamo::Vowel('ㅏ'));
+    /// composer.push(&Jamo::from_compatibility_jamo('ㄱ').unwrap());
+    /// composer.push(&Jamo::from_compatibility_jamo('ㅏ').unwrap());
     ///
-    /// assert_eq!(composer.pop(), BlockPopStatus::PoppedAndNonEmpty(Jamo::Vowel('ㅏ')));
-    /// assert_eq!(composer.pop(), BlockPopStatus::PoppedAndEmpty(Jamo::Consonant('ㄱ')));
+    /// assert_eq!(composer.pop(), BlockPopStatus::PoppedAndNonEmpty(Jamo::Vowel(JamoVowelSingular::A)));
+    /// assert_eq!(composer.pop(), BlockPopStatus::PoppedAndEmpty(Jamo::Consonant(JamoConsonantSingular::Giyeok)));
     /// assert_eq!(composer.pop(), BlockPopStatus::None);
     /// ```
     pub fn pop(&mut self) -> BlockPopStatus {
@@ -521,26 +522,26 @@ impl BlockComposer {
     /// **Example:**
     /// ```rust
     /// use hangul::block::{BlockComposer, BlockCompletionStatus, HangulBlock};
-    /// use hangul::jamo::Jamo;
+    /// use hangul::jamo::{Jamo, JamoConsonantSingular, JamoVowelSingular};
     ///
     /// let mut composer = BlockComposer::new();
     ///
-    /// composer.push(&Jamo::Consonant('ㄱ'));
+    /// composer.push(&Jamo::from_compatibility_jamo('ㄱ').unwrap());
     ///
     /// // Attempt to complete incomplete block
     /// assert_eq!(
     ///     composer.try_as_complete_block(),
-    ///     Ok(BlockCompletionStatus::Incomplete('ㄱ'))
+    ///     Ok(BlockCompletionStatus::Incomplete(Jamo::Consonant(JamoConsonantSingular::Giyeok)))
     /// );
     ///
-    /// composer.push(&Jamo::Vowel('ㅏ'));
+    /// composer.push(&Jamo::from_compatibility_jamo('ㅏ').unwrap());
     ///
     /// // Get the complete block now that a vowel has been added
     /// assert_eq!(
     ///    composer.try_as_complete_block(),
     ///    Ok(BlockCompletionStatus::Complete(HangulBlock {
-    ///        initial: 'ㄱ',
-    ///        vowel: 'ㅏ',
+    ///        initial: Jamo::Consonant(JamoConsonantSingular::Giyeok),
+    ///        vowel: Jamo::Vowel(JamoVowelSingular::A),
     ///        final_optional: None,
     ///    }))
     /// );
