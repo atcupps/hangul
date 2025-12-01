@@ -1,6 +1,26 @@
 use std::fmt::Debug;
 
+use thiserror::Error;
+
 use crate::{block::*, jamo::*};
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum WordError {
+    #[error("Block error: {0}")]
+    BlockError(#[from] BlockError),
+
+    #[error("Jamo error: {0}")]
+    JamoError(#[from] JamoError),
+
+    #[error("Could not start new block with character '{0}'; reason: {1:?}")]
+    CouldNotStartNewBlock(char, BlockPushResult),
+
+    #[error("Tried popping from empty word")]
+    NothingToPop,
+
+    #[error("Cannot complete current block; currently contains only one Jamo: {0:?}")]
+    CannotCompleteCurrentBlock(Jamo),
+}
 
 /// A composer for a single Hangul word, made up of multiple syllable blocks.
 /// The `HangulWordComposer` maintains a list of completed `HangulBlock`s and a
@@ -84,7 +104,7 @@ impl HangulWordComposer {
     /// the current or a new block, `WordPushResult::InvalidHangul` is returned.
     ///
     /// If the character is not Hangul, `WordPushResult::NonHangul` is returned.
-    pub fn push_char(&mut self, c: char) -> Result<WordPushResult, String> {
+    pub fn push_char(&mut self, c: char) -> Result<WordPushResult, WordError> {
         match Character::from_char(c)? {
             Character::Hangul(jamo) => self.push(&jamo),
             Character::NonHangul(_) => Ok(WordPushResult::NonHangul),
@@ -96,7 +116,7 @@ impl HangulWordComposer {
     /// Pushing appends to the current syllable block if that would make a
     /// valid Hangul syllable; otherwise, it completes the current block and
     /// creates a new block with the pushed character.
-    pub fn push(&mut self, letter: &Jamo) -> Result<WordPushResult, String> {
+    pub fn push(&mut self, letter: &Jamo) -> Result<WordPushResult, WordError> {
         match self.cur_block.push(letter) {
             BlockPushResult::Success => Ok(WordPushResult::Continue),
             BlockPushResult::InvalidHangul => Ok(WordPushResult::InvalidHangul),
@@ -123,7 +143,7 @@ impl HangulWordComposer {
     /// Returns `Ok(Some(Jamo))` if a letter was successfully removed,
     /// `Ok(None)` if there are no letters to remove, or `Err(String)` if an
     /// error occurred during the operation.
-    pub fn pop(&mut self) -> Result<Option<Jamo>, String> {
+    pub fn pop(&mut self) -> Result<Option<Jamo>, WordError> {
         match self.cur_block.pop() {
             BlockPopStatus::PoppedAndNonEmpty(l) => Ok(Some(l)),
             BlockPopStatus::PoppedAndEmpty(l) => {
@@ -137,7 +157,7 @@ impl HangulWordComposer {
         }
     }
 
-    fn prev_block_to_cur(&mut self) -> Result<(), String> {
+    fn prev_block_to_cur(&mut self) -> Result<(), WordError> {
         if let Some(last_block) = self.prev_blocks.pop() {
             self.cur_block = BlockComposer::from_composed_block(&last_block)?;
             Ok(())
@@ -146,33 +166,30 @@ impl HangulWordComposer {
         }
     }
 
-    fn pop_and_start_new_block(&mut self, letter: Jamo) -> Result<(), String> {
+    fn pop_and_start_new_block(&mut self, letter: Jamo) -> Result<(), WordError> {
         match self.cur_block.pop_end_consonant() {
             Some(l) => {
                 self.complete_current_block()?;
                 self.cur_block.push(&l);
                 match self.cur_block.push(&letter) {
                     BlockPushResult::Success => Ok(()),
-                    other => Err(format!(
-                        "Error starting new block with letter: {:?}; got result: {:?}",
-                        letter, other
+                    other => Err(WordError::CouldNotStartNewBlock(
+                        letter.char_compatibility(),
+                        other,
                     )),
                 }
             }
-            None => Err(format!(
-                "Could not pop end consonant in function start_new_block with letter: {:?}",
-                letter
-            )),
+            None => Err(WordError::NothingToPop),
         }
     }
 
-    fn start_new_block(&mut self, letter: Jamo) -> Result<(), String> {
+    fn start_new_block(&mut self, letter: Jamo) -> Result<(), WordError> {
         self.complete_current_block()?;
         match self.cur_block.push(&letter) {
             BlockPushResult::Success => Ok(()),
-            other => Err(format!(
-                "Error starting new block with letter: {:?}; got result: {:?}",
-                letter, other
+            other => Err(WordError::CouldNotStartNewBlock(
+                letter.char_compatibility(),
+                other,
             )),
         }
     }
@@ -180,7 +197,7 @@ impl HangulWordComposer {
     /// Returns the composed string for the current Hangul word.
     /// This includes all completed syllable blocks and the current block,
     /// even if it is incomplete.
-    pub fn as_string(&self) -> Result<String, String> {
+    pub fn as_string(&self) -> Result<String, WordError> {
         let mut result = hangul_blocks_vec_to_string(&self.prev_blocks)?;
         let cur_as_char = self.cur_block.block_as_string()?;
         if let Some(c) = cur_as_char {
@@ -189,20 +206,14 @@ impl HangulWordComposer {
         Ok(result)
     }
 
-    fn complete_current_block(&mut self) -> Result<(), String> {
+    fn complete_current_block(&mut self) -> Result<(), WordError> {
         match self.cur_block.try_as_complete_block()? {
             BlockCompletionStatus::Complete(block) => {
                 self.prev_blocks.push(block);
                 self.cur_block = BlockComposer::new();
                 Ok(())
             }
-            BlockCompletionStatus::Incomplete(c) => Err(format!(
-                "Cannot complete current block: incomplete block state, leftover char: {:?}",
-                c.char_modern(match c {
-                    Jamo::Consonant(_) | Jamo::CompositeConsonant(_) => JamoPosition::Initial,
-                    Jamo::Vowel(_) | Jamo::CompositeVowel(_) => JamoPosition::Vowel,
-                })
-            )),
+            BlockCompletionStatus::Incomplete(c) => Err(WordError::CannotCompleteCurrentBlock(c)),
             BlockCompletionStatus::Empty => {
                 // Nothing to complete
                 Ok(())
@@ -256,18 +267,17 @@ mod tests {
 
         assert_eq!(
             composer.start_new_block(Jamo::Vowel(JamoVowelSingular::A)),
-            Err(
-                "Error starting new block with letter: Vowel(A); got result: InvalidHangul"
-                    .to_string()
-            )
+            Err(WordError::CouldNotStartNewBlock(
+                'ㅏ',
+                BlockPushResult::InvalidHangul
+            ))
         );
         let _ = composer.push_char('ㄱ');
         assert_eq!(
             composer.start_new_block(Jamo::CompositeVowel(JamoVowelComposite::Wae)),
-            Err(
-                "Cannot complete current block: incomplete block state, leftover char: Some('ᄀ')"
-                    .to_string()
-            )
+            Err(WordError::CannotCompleteCurrentBlock(Jamo::Consonant(
+                JamoConsonantSingular::Giyeok
+            )))
         );
     }
 

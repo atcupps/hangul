@@ -1,4 +1,12 @@
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum JamoError {
+    #[error("Could not convert character '{0}' to Jamo")]
+    FromCharError(char),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum JamoUnicodeEra {
     Modern,
     Compatibility,
@@ -8,7 +16,7 @@ pub enum JamoUnicodeEra {
 }
 
 impl JamoUnicodeEra {
-    pub fn from_char(c: char) -> JamoUnicodeEra {
+    pub fn evaluate(c: char) -> JamoUnicodeEra {
         match c as u32 {
             0x1100..=0x1112 | 0x1161..=0x1175 | 0x11A8..=0x11C2 => JamoUnicodeEra::Modern,
             0x3130..=0x3163 => JamoUnicodeEra::Compatibility,
@@ -329,8 +337,8 @@ impl Character {
     ///     Character::NonHangul('A')
     /// );
     /// ```
-    pub fn from_char(c: char) -> Result<Self, String> {
-        match JamoUnicodeEra::from_char(c) {
+    pub fn from_char(c: char) -> Result<Self, JamoError> {
+        match JamoUnicodeEra::evaluate(c) {
             JamoUnicodeEra::Modern => {
                 let cc = modern_to_compatibility_jamo(c);
                 Self::from_compatibility_jamo(cc)
@@ -340,7 +348,7 @@ impl Character {
         }
     }
 
-    fn from_compatibility_jamo(c: char) -> Result<Self, String> {
+    fn from_compatibility_jamo(c: char) -> Result<Self, JamoError> {
         Ok(Self::Hangul(Jamo::from_compatibility_jamo(c)?))
     }
 
@@ -955,7 +963,7 @@ impl Jamo {
     /// let jamo = Jamo::from_modern_jamo('ᄀ').unwrap();
     /// assert_eq!(jamo, Jamo::Consonant(JamoConsonantSingular::Giyeok));
     /// ```
-    pub fn from_modern_jamo(c: char) -> Result<Self, String> {
+    pub fn from_modern_jamo(c: char) -> Result<Self, JamoError> {
         let cc = modern_to_compatibility_jamo(c);
         Self::from_compatibility_jamo(cc)
     }
@@ -968,7 +976,7 @@ impl Jamo {
     /// let jamo = Jamo::from_compatibility_jamo('ㄱ').unwrap();
     /// assert_eq!(jamo, Jamo::Consonant(JamoConsonantSingular::Giyeok));
     /// ```
-    pub fn from_compatibility_jamo(c: char) -> Result<Self, String> {
+    pub fn from_compatibility_jamo(c: char) -> Result<Self, JamoError> {
         match c {
             // Singular consonants
             'ㄱ' => Ok(Jamo::Consonant(JamoConsonantSingular::Giyeok)),
@@ -1035,10 +1043,7 @@ impl Jamo {
             'ㅟ' => Ok(Jamo::CompositeVowel(JamoVowelComposite::Wi)),
             'ㅢ' => Ok(Jamo::CompositeVowel(JamoVowelComposite::Ui)),
 
-            _ => Err(format!(
-                "Character '{}' is not a valid compatibility jamo.",
-                c
-            )),
+            _ => Err(JamoError::FromCharError(c)),
         }
     }
 }

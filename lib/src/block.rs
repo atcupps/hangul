@@ -1,5 +1,25 @@
+use thiserror::Error;
+
 use crate::jamo::*;
 use std::fmt::Debug;
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum BlockError {
+    #[error("Jamo error: {0:?}")]
+    JamoError(#[from] JamoError),
+
+    #[error("Could not convert unknown codepoint U+{0:04X} to Hangul syllable block")]
+    ProblematicCodepoint(u32),
+
+    #[error("Jamo '{0:?}' is not valid in position '{1:?}' for Unicode era '{2:?}'")]
+    InvalidJamoContext(Jamo, JamoPosition, JamoUnicodeEra),
+
+    #[error("Could not convert codepoint U+{0:04X} to valid Unicode character")]
+    InvalidUnicodeCharacter(u32),
+
+    #[error("Jamo '{0:?}' is in invalid position; expected '{1:?}'")]
+    JamoInInvalidPosition(Jamo, JamoPosition),
+}
 
 /// A struct representing a composed Hangul syllable block,
 /// consisting of an initial character, a vowel character,
@@ -53,20 +73,29 @@ pub struct HangulBlock {
 
 impl HangulBlock {
     /// Converts the `HangulBlock` into a composed Hangul syllable unicode
-    /// character. Assumes all chars are valid Jamo. If the block cannot be
-    /// converted into a valid Hangul syllable, returns an `Err` with the
-    /// problematic unicode code point, or 0 if the conversion fails for
-    /// other reasons.
-    pub fn to_char(&self) -> Result<char, u32> {
+    /// character. Assumes all chars are valid Jamo.
+    pub fn to_char(&self) -> Result<char, BlockError> {
         // Ensure the initial, vowel, and final are modern Jamo and not
         // compatibility jamo
         let initial = match self.initial.char_modern(JamoPosition::Initial) {
             Some(c) => c,
-            None => return Err(0),
+            None => {
+                return Err(BlockError::InvalidJamoContext(
+                    self.initial.clone(),
+                    JamoPosition::Initial,
+                    JamoUnicodeEra::Modern,
+                ));
+            }
         };
         let vowel = match self.vowel.char_modern(JamoPosition::Vowel) {
             Some(c) => c,
-            None => return Err(0),
+            None => {
+                return Err(BlockError::InvalidJamoContext(
+                    self.vowel.clone(),
+                    JamoPosition::Vowel,
+                    JamoUnicodeEra::Modern,
+                ));
+            }
         };
         let final_optional = match &self.final_optional {
             Some(c) => c.char_modern(JamoPosition::Final),
@@ -95,17 +124,14 @@ impl HangulBlock {
         if let Some(c) = std::char::from_u32(S_BASE + s_index) {
             Ok(c)
         } else {
-            Err(S_BASE + s_index)
+            Err(BlockError::ProblematicCodepoint(S_BASE + s_index))
         }
     }
 
-    pub fn from_char(c: char) -> Result<Self, String> {
+    pub fn from_char(c: char) -> Result<Self, BlockError> {
         let codepoint = c as u32;
         if codepoint < S_BASE || codepoint > S_BASE + S_COUNT {
-            return Err(format!(
-                "Character U+{:04X} is not a valid Hangul syllable block.",
-                codepoint
-            ));
+            return Err(BlockError::ProblematicCodepoint(codepoint));
         }
 
         let s_index = codepoint - S_BASE;
@@ -114,14 +140,17 @@ impl HangulBlock {
         let t_index = s_index % T_COUNT;
 
         let initial = Jamo::from_modern_jamo(
-            std::char::from_u32(L_BASE + l_index).ok_or("Invalid initial Jamo codepoint")?,
+            std::char::from_u32(L_BASE + l_index)
+                .ok_or(BlockError::InvalidUnicodeCharacter(L_BASE + l_index))?,
         )?;
         let vowel = Jamo::from_modern_jamo(
-            std::char::from_u32(V_BASE + v_index).ok_or("Invalid vowel Jamo codepoint")?,
+            std::char::from_u32(V_BASE + v_index)
+                .ok_or(BlockError::InvalidUnicodeCharacter(V_BASE + v_index))?,
         )?;
         let final_optional = if t_index > 0 {
             Some(Jamo::from_modern_jamo(
-                std::char::from_u32(T_BASE + t_index).ok_or("Invalid final Jamo codepoint")?,
+                std::char::from_u32(T_BASE + t_index)
+                    .ok_or(BlockError::InvalidUnicodeCharacter(T_BASE + t_index))?,
             )?)
         } else {
             None
@@ -154,7 +183,7 @@ impl HangulBlock {
             Option<Jamo>,
             Option<Jamo>,
         ),
-        String,
+        BlockError,
     > {
         let (i1, i2) = match &self.initial {
             Jamo::CompositeConsonant(c) => match c.decompose() {
@@ -186,26 +215,35 @@ impl HangulBlock {
     pub fn decomposed_vec(
         &self,
         options: &HangulBlockDecompositionOptions,
-    ) -> Result<Vec<char>, String> {
+    ) -> Result<Vec<char>, BlockError> {
         let mut result = Vec::new();
 
         match (&self.initial, &options.jamo_era) {
             (Jamo::CompositeConsonant(c), JamoUnicodeEra::Modern) => {
                 if options.decompose_composites {
                     let (a, b) = c.decompose();
-                    result.push(
-                        a.char_modern(JamoPosition::Initial)
-                            .ok_or("Invalid initial Jamo")?,
-                    );
-                    result.push(
-                        b.char_modern(JamoPosition::Initial)
-                            .ok_or("Invalid initial Jamo")?,
-                    );
+                    result.push(a.char_modern(JamoPosition::Initial).ok_or(
+                        BlockError::InvalidJamoContext(
+                            a,
+                            JamoPosition::Initial,
+                            JamoUnicodeEra::Modern,
+                        ),
+                    )?);
+                    result.push(b.char_modern(JamoPosition::Initial).ok_or(
+                        BlockError::InvalidJamoContext(
+                            b,
+                            JamoPosition::Initial,
+                            JamoUnicodeEra::Modern,
+                        ),
+                    )?);
                 } else {
-                    result.push(
-                        c.char_modern(JamoPosition::Initial)
-                            .ok_or("Invalid initial Jamo")?,
-                    );
+                    result.push(c.char_modern(JamoPosition::Initial).ok_or(
+                        BlockError::InvalidJamoContext(
+                            Jamo::CompositeConsonant(c.clone()),
+                            JamoPosition::Initial,
+                            JamoUnicodeEra::Modern,
+                        ),
+                    )?);
                 }
             }
             (Jamo::CompositeConsonant(c), JamoUnicodeEra::Compatibility) => {
@@ -221,18 +259,21 @@ impl HangulBlock {
                 }
             }
             (Jamo::Consonant(c), JamoUnicodeEra::Modern) => {
-                result.push(
-                    c.char_modern(JamoPosition::Initial)
-                        .ok_or("Invalid initial Jamo")?,
-                );
+                result.push(c.char_modern(JamoPosition::Initial).ok_or(
+                    BlockError::InvalidJamoContext(
+                        Jamo::Consonant(c.clone()),
+                        JamoPosition::Initial,
+                        JamoUnicodeEra::Modern,
+                    ),
+                )?);
             }
             (Jamo::Consonant(c), JamoUnicodeEra::Compatibility) => {
                 result.push(c.char_compatibility());
             }
-            _ => {
-                return Err(format!(
-                    "Invalid initial Jamo in HangulBlock: {:?}",
-                    self.initial
+            (j, _) => {
+                return Err(BlockError::JamoInInvalidPosition(
+                    j.clone(),
+                    JamoPosition::Initial,
                 ));
             }
         }
@@ -241,14 +282,20 @@ impl HangulBlock {
             (Jamo::CompositeVowel(c), JamoUnicodeEra::Modern) => {
                 if options.decompose_composites {
                     let (a, b) = c.decompose();
-                    result.push(
-                        a.char_modern(JamoPosition::Vowel)
-                            .ok_or("Invalid vowel Jamo")?,
-                    );
-                    result.push(
-                        b.char_modern(JamoPosition::Vowel)
-                            .ok_or("Invalid vowel Jamo")?,
-                    );
+                    result.push(a.char_modern(JamoPosition::Vowel).ok_or(
+                        BlockError::InvalidJamoContext(
+                            Jamo::CompositeVowel(c.clone()),
+                            JamoPosition::Vowel,
+                            JamoUnicodeEra::Modern,
+                        ),
+                    )?);
+                    result.push(b.char_modern(JamoPosition::Vowel).ok_or(
+                        BlockError::InvalidJamoContext(
+                            Jamo::CompositeVowel(c.clone()),
+                            JamoPosition::Vowel,
+                            JamoUnicodeEra::Modern,
+                        ),
+                    )?);
                 } else {
                     result.push(c.char_modern());
                 }
@@ -272,9 +319,9 @@ impl HangulBlock {
                 result.push(c.char_compatibility());
             }
             _ => {
-                return Err(format!(
-                    "Invalid vowel Jamo in HangulBlock: {:?}",
-                    self.vowel
+                return Err(BlockError::JamoInInvalidPosition(
+                    self.vowel.clone(),
+                    JamoPosition::Vowel,
                 ));
             }
         }
@@ -284,19 +331,28 @@ impl HangulBlock {
                 (Jamo::CompositeConsonant(c), JamoUnicodeEra::Modern) => {
                     if options.decompose_composites {
                         let (a, b) = c.decompose();
-                        result.push(
-                            a.char_modern(JamoPosition::Final)
-                                .ok_or("Invalid final Jamo")?,
-                        );
-                        result.push(
-                            b.char_modern(JamoPosition::Final)
-                                .ok_or("Invalid final Jamo")?,
-                        );
+                        result.push(a.char_modern(JamoPosition::Final).ok_or(
+                            BlockError::InvalidJamoContext(
+                                Jamo::CompositeConsonant(c.clone()),
+                                JamoPosition::Final,
+                                JamoUnicodeEra::Modern,
+                            ),
+                        )?);
+                        result.push(b.char_modern(JamoPosition::Final).ok_or(
+                            BlockError::InvalidJamoContext(
+                                Jamo::CompositeConsonant(c.clone()),
+                                JamoPosition::Final,
+                                JamoUnicodeEra::Modern,
+                            ),
+                        )?);
                     } else {
-                        result.push(
-                            c.char_modern(JamoPosition::Final)
-                                .ok_or("Invalid final Jamo")?,
-                        );
+                        result.push(c.char_modern(JamoPosition::Final).ok_or(
+                            BlockError::InvalidJamoContext(
+                                Jamo::CompositeConsonant(c.clone()),
+                                JamoPosition::Final,
+                                JamoUnicodeEra::Modern,
+                            ),
+                        )?);
                     }
                 }
                 (Jamo::CompositeConsonant(c), JamoUnicodeEra::Compatibility) => {
@@ -312,18 +368,21 @@ impl HangulBlock {
                     }
                 }
                 (Jamo::Consonant(c), JamoUnicodeEra::Modern) => {
-                    result.push(
-                        c.char_modern(JamoPosition::Final)
-                            .ok_or("Invalid final Jamo")?,
-                    );
+                    result.push(c.char_modern(JamoPosition::Final).ok_or(
+                        BlockError::InvalidJamoContext(
+                            Jamo::Consonant(c.clone()),
+                            JamoPosition::Final,
+                            JamoUnicodeEra::Modern,
+                        ),
+                    )?);
                 }
                 (Jamo::Consonant(c), JamoUnicodeEra::Compatibility) => {
                     result.push(c.char_compatibility());
                 }
                 _ => {
-                    return Err(format!(
-                        "Invalid final Jamo in HangulBlock: {:?}",
-                        final_jamo
+                    return Err(BlockError::JamoInInvalidPosition(
+                        final_jamo.clone(),
+                        JamoPosition::Final,
                     ));
                 }
             }
@@ -763,31 +822,47 @@ impl BlockComposer {
     ///    }))
     /// );
     /// ```
-    pub fn try_as_complete_block(&self) -> Result<BlockCompletionStatus, String> {
+    pub fn try_as_complete_block(&self) -> Result<BlockCompletionStatus, BlockError> {
         let initial_optional = match (&self.initial_first, &self.initial_second) {
-            (Some(Jamo::Consonant(i1)), Some(Jamo::Consonant(i2))) => Some(
-                Jamo::CompositeConsonant(i1.combine_for_initial(&i2).ok_or_else(|| {
-                    format!("Invalid composite initial consonant: {:?}{:?}", i1, i2)
-                })?),
-            ),
+            (Some(Jamo::Consonant(i1)), Some(Jamo::Consonant(i2))) => {
+                match i1.combine_for_initial(&i2) {
+                    Some(composite) => Some(Jamo::CompositeConsonant(composite)),
+                    None => {
+                        return Err(BlockError::JamoInInvalidPosition(
+                            Jamo::Consonant(i2.clone()),
+                            JamoPosition::Initial,
+                        ));
+                    }
+                }
+            }
             (Some(i1), None) => Some(i1.clone()),
             _ => None,
         };
         let vowel_optional = match (&self.vowel_first, &self.vowel_second) {
-            (Some(Jamo::Vowel(v1)), Some(Jamo::Vowel(v2))) => {
-                Some(Jamo::CompositeVowel(v1.combine(&v2).ok_or_else(|| {
-                    format!("Invalid composite vowel: {:?}{:?}", v1, v2)
-                })?))
-            }
+            (Some(Jamo::Vowel(v1)), Some(Jamo::Vowel(v2))) => match v1.combine(&v2) {
+                Some(composite) => Some(Jamo::CompositeVowel(composite)),
+                None => {
+                    return Err(BlockError::JamoInInvalidPosition(
+                        Jamo::Vowel(v2.clone()),
+                        JamoPosition::Vowel,
+                    ));
+                }
+            },
             (Some(v1), None) => Some(v1.clone()),
             _ => None,
         };
         let final_optional = match (&self.final_first, &self.final_second) {
-            (Some(Jamo::Consonant(f1)), Some(Jamo::Consonant(f2))) => Some(
-                Jamo::CompositeConsonant(f1.combine_for_final(&f2).ok_or_else(|| {
-                    format!("Invalid composite final consonant: {:?}{:?}", f1, f2)
-                })?),
-            ),
+            (Some(Jamo::Consonant(f1)), Some(Jamo::Consonant(f2))) => {
+                match f1.combine_for_final(&f2) {
+                    Some(composite) => Some(Jamo::CompositeConsonant(composite)),
+                    None => {
+                        return Err(BlockError::JamoInInvalidPosition(
+                            Jamo::Consonant(f2.clone()),
+                            JamoPosition::Final,
+                        ));
+                    }
+                }
+            }
             (Some(f1), None) => Some(f1.clone()),
             _ => None,
         };
@@ -812,12 +887,11 @@ impl BlockComposer {
     /// character. If the block is incomplete, it returns the Jamo currently in
     /// the block (in modern Unicode form, not compatibility form). If the block is empty,
     /// it returns `None`.
-    pub fn block_as_string(&self) -> Result<Option<char>, String> {
+    pub fn block_as_string(&self) -> Result<Option<char>, BlockError> {
         match self.try_as_complete_block()? {
-            BlockCompletionStatus::Complete(block) => block
-                .to_char()
-                .map(Some)
-                .map_err(|e| format!("Error converting block to char: U+{:04X}", e)),
+            BlockCompletionStatus::Complete(block) => match block.to_char()? {
+                c => Ok(Some(c)),
+            },
             BlockCompletionStatus::Incomplete(c) => Ok(c.char_modern(match c {
                 Jamo::Consonant(_) | Jamo::CompositeConsonant(_) => JamoPosition::Initial,
                 Jamo::Vowel(_) | Jamo::CompositeVowel(_) => JamoPosition::Vowel,
@@ -829,7 +903,7 @@ impl BlockComposer {
     /// Creates a `BlockComposer` from an existing `HangulBlock`,
     /// decomposing it into its constituent Jamo characters.
     /// Returns an error if decomposition fails.
-    pub fn from_composed_block(block: &HangulBlock) -> Result<Self, String> {
+    pub fn from_composed_block(block: &HangulBlock) -> Result<Self, BlockError> {
         let mut result = BlockComposer::new();
         let (i1, i2, v1, v2, f1, f2) = block.decomposed_tuple()?;
 
@@ -867,18 +941,10 @@ impl BlockComposer {
 
 /// Converts a vector of `HangulBlock` structs into a composed Hangul string.
 /// Returns an `Err` if any block cannot be converted into a valid Hangul syllable.
-pub fn hangul_blocks_vec_to_string(blocks: &Vec<HangulBlock>) -> Result<String, String> {
+pub fn hangul_blocks_vec_to_string(blocks: &Vec<HangulBlock>) -> Result<String, BlockError> {
     let mut result = String::new();
     for block in blocks {
-        match block.to_char() {
-            Ok(c) => result.push(c),
-            Err(codepoint) => {
-                return Err(format!(
-                    "Failed to convert HangulBlock: {:?} to char. Invalid codepoint: U+{:X}",
-                    block, codepoint
-                ));
-            }
-        }
+        result.push(block.to_char()?);
     }
     Ok(result)
 }

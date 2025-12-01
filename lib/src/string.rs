@@ -1,7 +1,15 @@
+use thiserror::Error;
+
 use crate::{
     jamo::{Jamo, JamoPosition},
     word::*,
 };
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum StringError {
+    #[error("Word error: {0}")]
+    WordError(#[from] WordError),
+}
 
 /// A composer struct that manages the composition of strings of text
 /// consisting of multiple words, including both Hangul words and non-Hangul
@@ -68,7 +76,7 @@ impl StringComposer {
     ///
     /// If the character is part of a Hangul word, it will be composed into syllables.
     /// Otherwise, it will be added directly to the completed string.
-    pub fn push_char(&mut self, c: char) -> Result<(), String> {
+    pub fn push_char(&mut self, c: char) -> Result<(), StringError> {
         match self.current.push_char(c)? {
             WordPushResult::Continue => Ok(()),
             _ => self.handle_invalid_input(c),
@@ -76,7 +84,7 @@ impl StringComposer {
     }
 
     /// Returns the composed string, combining completed text and the current word.
-    pub fn as_string(&self) -> Result<String, String> {
+    pub fn as_string(&self) -> Result<String, StringError> {
         let mut result = self.completed.clone();
         let current_string = self.current.as_string()?;
         result.push_str(&current_string);
@@ -89,7 +97,7 @@ impl StringComposer {
     /// If the current word is a Hangul word with uncompleted syllables, it will
     /// remove the last jamo from the current syllable block. Otherwise, it will
     /// remove the last character from the completed string.
-    pub fn pop(&mut self) -> Result<Option<char>, String> {
+    pub fn pop(&mut self) -> Result<Option<char>, StringError> {
         match self.current.pop()? {
             Some(c) => Ok(c.char_modern(match c {
                 Jamo::Consonant(_) | Jamo::CompositeConsonant(_) => JamoPosition::Initial,
@@ -102,7 +110,7 @@ impl StringComposer {
         }
     }
 
-    fn handle_invalid_input(&mut self, c: char) -> Result<(), String> {
+    fn handle_invalid_input(&mut self, c: char) -> Result<(), StringError> {
         let current_string = self.current.as_string()?;
         self.completed.push_str(&current_string);
         self.completed.push(c);
