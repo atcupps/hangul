@@ -5,10 +5,12 @@
 Rust helpers for composing and decomposing modern Hangul syllable blocks from jamo. The crate in `lib/` exposes small, focused modules for combining jamo into syllables, grouping syllables into words, and mixing Hangul with arbitrary text while enforcing valid Unicode Hangul composition rules.
 
 ### Modules
-- `jamo` – Modern jamo constants, helpers to create/decompose composite jamo, and converters from compatibility jamo to the modern code points. Also provides the `Character` classifier and the `Jamo` enum used across the crate.
-- `block` – `HangulBlock` (initial, vowel, optional final) plus a `BlockComposer` state machine that only accepts valid jamo sequences. Includes helpers to convert blocks into Unicode syllable chars and back.
-- `word` – `HangulWordComposer` wraps a `BlockComposer` and a list of completed blocks, letting you stream jamo in, pop them out, and automatically start new syllable blocks when needed.
-- `string` – `StringComposer` layers on top of `HangulWordComposer` so you can interleave Hangul input with non-Hangul text; invalid/compatibility jamo are normalized and non-Hangul is passed through.
+
+hangul-cd focuses heavily on composition through a modular wrapper approach. There are four modules, each providing an API wrapper layer over the previous one:
+- `jamo` - The Jamo layer provides utilities for working directly with individual Hangul Jamo; Jamo are stored as enum values, allowing for instantiation from and conversion to either Modern or Compatibility Unicode codepoints, as well as helpers for classification of Jamo.
+- `block` - The Block layer provides a `HangulBlock` struct for composing syllable blocks from individual Jamo, as well as a `BlockComposer` which allows callers to use a simple stack-like push-pop interface to add to or remove from a given block, and functions to convert blocks to Unicode codepoints, as well as take completed blocks and decompose them into individual Modern or Compatibility Jamo codepoints.
+- `word` - The Word layer wraps the Block layer by keeping track of a list of Hangul blocks and extends the push-pop mechanism from the Block layer, allowing callers to create full Hangul words composed of multiple syllable blocks simply by pushing Jamo repeatedly and print to Unicode codepoints.
+- `string` - The String layer allows for mixing of Hangul and non-Hangul text and continues to make use of the push-pop mechanism from previous layers.
 
 ### Quick start
 Add the crate to your project (for a local path):

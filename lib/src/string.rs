@@ -5,8 +5,10 @@ use crate::{
     word::*,
 };
 
+/// An error type for `StringComposer` operations.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum StringError {
+    /// Occurs when there is an error related to word composition.
     #[error("Word error: {0}")]
     WordError(#[from] WordError),
 }

@@ -1,30 +1,57 @@
 use thiserror::Error;
 
+/// An error enum for Jamo-related errors.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum JamoError {
+    /// Character could not be converted to Jamo
     #[error("Could not convert character '{0}' to Jamo")]
     FromCharError(char),
 }
 
+/// An enum for the Unicode type of a Jamo character. Types include
+/// modern, compatibility, non-standard modern, non-standard compatibility,
+/// and non-Hangul.
 #[derive(Debug, PartialEq, Eq)]
-pub enum JamoUnicodeEra {
+pub enum JamoUnicodeType {
+    /// Modern Jamo; these are used to construct standard modern pre-composed
+    /// Hangul syllable blocks.
     Modern,
+
+    /// Compatibility Jamo; these are included in Unicode for compatibility
+    /// with older standards and encodings. These are not used for composing
+    /// standard modern Hangul syllables, but can be converted to modern Jamo.
+    /// Some Korean IMEs produce compatibility Jamo characters if not
+    /// converted to syllable blocks.
     Compatibility,
+
+    /// Non-standard modern Jamo; these are not used for composing standard modern
+    /// Hangul syllables and fall outside the typical modern Jamo range.
+    /// These are typically archaic or obsolete jamo characters.
     NonStandardModern,
+
+    /// Non-standard compatibility Jamo; these are not used for composing
+    /// standard modern Hangul syllables and fall outside the typical
+    /// compatibility Jamo range. These are typically archaic or obsolete
+    /// jamo characters.
     NonStandardCompatibility,
+
+    /// Non-Hangul character; this is not a Hangul jamo character.
     NonHangul,
 }
 
-impl JamoUnicodeEra {
-    pub fn evaluate(c: char) -> JamoUnicodeEra {
+impl JamoUnicodeType {
+    /// Evaluates a character and determines its Jamo Unicode type
+    /// as being modern, compatibility, non-standard modern,
+    /// non-standard compatibility, or non-Hangul.
+    pub fn evaluate(c: char) -> JamoUnicodeType {
         match c as u32 {
-            0x1100..=0x1112 | 0x1161..=0x1175 | 0x11A8..=0x11C2 => JamoUnicodeEra::Modern,
-            0x3130..=0x3163 => JamoUnicodeEra::Compatibility,
+            0x1100..=0x1112 | 0x1161..=0x1175 | 0x11A8..=0x11C2 => JamoUnicodeType::Modern,
+            0x3130..=0x3163 => JamoUnicodeType::Compatibility,
             0x1113..=0x1160 | 0x1176..=0x11A7 | 0x11C3..=0x11FF => {
-                JamoUnicodeEra::NonStandardModern
+                JamoUnicodeType::NonStandardModern
             }
-            0x3164..=0x318F => JamoUnicodeEra::NonStandardCompatibility,
-            _ => JamoUnicodeEra::NonHangul,
+            0x3164..=0x318F => JamoUnicodeType::NonStandardCompatibility,
+            _ => JamoUnicodeType::NonHangul,
         }
     }
 }
@@ -283,7 +310,8 @@ pub fn modern_to_compatibility_jamo(c: char) -> char {
 }
 
 /// An enum representing either a Hangul Jamo character or a non-Hangul
-/// character.
+/// character. Archaic or non-standard jamo like ᅀ will be classified as NonHangul
+/// because they are not used in standard modern Hangul syllable composition.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Character {
     NonHangul(char),
@@ -292,7 +320,8 @@ pub enum Character {
 
 impl Character {
     /// Determines the type of Hangul letter for a given character.
-    /// Does not work for archaic or non-standard jamo like ᅀ.
+    /// Archaic or non-standard jamo like ᅀ will be classified as NonHangul
+    /// because they are not used in standard modern Hangul syllable composition.
     /// Classifies a character as Hangul jamo or non-Hangul and
     /// returns the appropriate `Character` enum variant.
     ///
@@ -338,12 +367,12 @@ impl Character {
     /// );
     /// ```
     pub fn from_char(c: char) -> Result<Self, JamoError> {
-        match JamoUnicodeEra::evaluate(c) {
-            JamoUnicodeEra::Modern => {
+        match JamoUnicodeType::evaluate(c) {
+            JamoUnicodeType::Modern => {
                 let cc = modern_to_compatibility_jamo(c);
                 Self::from_compatibility_jamo(cc)
             }
-            JamoUnicodeEra::Compatibility => Self::from_compatibility_jamo(c),
+            JamoUnicodeType::Compatibility => Self::from_compatibility_jamo(c),
             _ => Ok(Character::NonHangul(c)),
         }
     }
@@ -352,7 +381,8 @@ impl Character {
         Ok(Self::Hangul(Jamo::from_compatibility_jamo(c)?))
     }
 
-    /// Returns the Jamo if the character is a Hangul jamo, or `None` otherwise.
+    /// Returns the Jamo if the `Character` is a Hangul jamo,
+    /// or `None` otherwise.
     pub fn jamo(&self) -> Option<&Jamo> {
         match self {
             Character::Hangul(jamo) => Some(jamo),
@@ -371,6 +401,7 @@ pub enum Jamo {
     CompositeVowel(JamoVowelComposite),
 }
 
+/// An enum representing singular Hangul consonant jamo.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum JamoConsonantSingular {
     /// ㄱ
@@ -404,6 +435,26 @@ pub enum JamoConsonantSingular {
 }
 
 impl JamoConsonantSingular {
+    /// Returns the modern jamo character for the given position
+    /// (initial or final). Returns `None` for positions that
+    /// are not applicable to consonants (i.e., medial).
+    ///
+    /// A position must be specified because consonants have multiple
+    /// encodings in the modern Jamo Unicode block depending on whether
+    /// they are used as initial or final consonants in a syllable.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::{
+    ///     JamoConsonantSingular,
+    ///     JamoPosition,
+    /// };
+    ///
+    /// let giyeok = JamoConsonantSingular::Giyeok;
+    /// assert_eq!(giyeok.char_modern(JamoPosition::Initial), Some('\u{1100}')); // Initial ㄱ
+    /// assert_eq!(giyeok.char_modern(JamoPosition::Final), Some('\u{11A8}'));   // Final ㄱ
+    /// assert_eq!(giyeok.char_modern(JamoPosition::Vowel), None);              // Medial is not applicable
+    /// ```
     pub fn char_modern(&self, position: JamoPosition) -> Option<char> {
         match position {
             JamoPosition::Initial => Some(self.char_modern_initial()),
@@ -450,6 +501,15 @@ impl JamoConsonantSingular {
         }
     }
 
+    /// Returns the compatibility jamo character for this singular consonant.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::JamoConsonantSingular;
+    ///
+    /// let siot = JamoConsonantSingular::Siot;
+    /// assert_eq!(siot.char_compatibility(), 'ㅅ');
+    /// ```
     pub fn char_compatibility(&self) -> char {
         match self {
             JamoConsonantSingular::Giyeok => 'ㄱ',
@@ -469,6 +529,28 @@ impl JamoConsonantSingular {
         }
     }
 
+    /// Combines this singular consonant with another singular consonant
+    /// to form a composite consonant for use in the initial position
+    /// of a Hangul syllable. Returns `None` if the combination is not valid.
+    ///
+    /// Only the following combinations are valid for initial position:
+    /// - ㄱ + ㄱ = ㄲ
+    /// - ㄷ + ㄷ = ㄸ
+    /// - ㅂ + ㅂ = ㅃ
+    /// - ㅅ + ㅅ = ㅆ
+    /// - ㅈ + ㅈ = ㅉ
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::{
+    ///     JamoConsonantSingular,
+    ///     JamoConsonantComposite,
+    /// };
+    ///
+    /// let bieup = JamoConsonantSingular::Bieup;
+    /// let composite = bieup.combine_for_initial(&JamoConsonantSingular::Bieup);
+    /// assert_eq!(composite, Some(JamoConsonantComposite::SsangBieup));
+    /// ```
     pub fn combine_for_initial(
         &self,
         other: &JamoConsonantSingular,
@@ -493,6 +575,36 @@ impl JamoConsonantSingular {
         }
     }
 
+    /// Combines this singular consonant with another singular consonant
+    /// to form a composite consonant for use in the final position
+    /// of a Hangul syllable. Returns `None` if the combination is not valid.
+    ///
+    /// Only the following combinations are valid for final position:
+    /// - ㄱ + ㅅ = ㄳ
+    /// - ㄴ + ㅈ = ㄵ
+    /// - ㄴ + ㅎ = ㄶ
+    /// - ㄹ + ㄱ = ㄺ
+    /// - ㄹ + ㅁ = ㄻ
+    /// - ㄹ + ㅂ = ㄼ
+    /// - ㄹ + ㅅ = ㄽ
+    /// - ㄹ + ㅌ = ㄾ
+    /// - ㄹ + ㅍ = ㄿ
+    /// - ㄹ + ㅎ = ㅀ
+    /// - ㅂ + ㅅ = ㅄ
+    /// - ㄱ + ㄱ = ㄲ
+    /// - ㅅ + ㅅ = ㅆ
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::{
+    ///     JamoConsonantSingular,
+    ///     JamoConsonantComposite,
+    /// };
+    ///
+    /// let rieul = JamoConsonantSingular::Rieul;
+    /// let composite = rieul.combine_for_final(&JamoConsonantSingular::Mieum);
+    /// assert_eq!(composite, Some(JamoConsonantComposite::RieulMieum));
+    /// ```
     pub fn combine_for_final(
         &self,
         other: &JamoConsonantSingular,
@@ -542,6 +654,7 @@ impl JamoConsonantSingular {
     }
 }
 
+/// An enum representing composite Hangul consonant jamo.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum JamoConsonantComposite {
     /// ㄳ
@@ -579,6 +692,26 @@ pub enum JamoConsonantComposite {
 }
 
 impl JamoConsonantComposite {
+    /// Returns the modern jamo character for the given position
+    /// (initial or final). Returns `None` for positions that
+    /// are not applicable to composite consonants (i.e., medial).
+    ///
+    /// A position must be specified because composite consonants have multiple
+    /// encodings in the modern Jamo Unicode block depending on whether
+    /// they are used as initial or final consonants in a syllable.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::{
+    ///     JamoConsonantComposite,
+    ///     JamoPosition,
+    /// };
+    ///
+    /// let ssang_giyeok = JamoConsonantComposite::SsangGiyeok;
+    /// assert_eq!(ssang_giyeok.char_modern(JamoPosition::Initial), Some('\u{1101}')); // Initial ㄲ
+    /// assert_eq!(ssang_giyeok.char_modern(JamoPosition::Final), Some('\u{11A9}'));   // Final ㄲ
+    /// assert_eq!(ssang_giyeok.char_modern(JamoPosition::Vowel), None);              // Medial is not applicable
+    /// ```
     pub fn char_modern(&self, position: JamoPosition) -> Option<char> {
         match position {
             JamoPosition::Initial => self.char_modern_initial(),
@@ -617,6 +750,15 @@ impl JamoConsonantComposite {
         }
     }
 
+    /// Returns the compatibility jamo character for this composite consonant.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::JamoConsonantComposite;
+    ///
+    /// let gieok_siot = JamoConsonantComposite::GiyeokSiot;
+    /// assert_eq!(gieok_siot.char_compatibility(), 'ㄳ');
+    /// ```
     pub fn char_compatibility(&self) -> char {
         match self {
             JamoConsonantComposite::GiyeokSiot => 'ㄳ',
@@ -638,6 +780,21 @@ impl JamoConsonantComposite {
         }
     }
 
+    /// Decomposes the composite consonant into its two constituent singular consonants.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::{
+    ///     Jamo,
+    ///     JamoConsonantSingular,
+    ///     JamoConsonantComposite,
+    /// };
+    ///
+    /// let composite = JamoConsonantComposite::RieulMieum;
+    /// let (first, second) = composite.decompose();
+    /// assert_eq!(first, Jamo::Consonant(JamoConsonantSingular::Rieul));
+    /// assert_eq!(second, Jamo::Consonant(JamoConsonantSingular::Mieum));
+    /// ```
     pub fn decompose(&self) -> (Jamo, Jamo) {
         match self {
             JamoConsonantComposite::GiyeokSiot => (
@@ -707,6 +864,19 @@ impl JamoConsonantComposite {
         }
     }
 
+    /// Checks if the composite consonant is valid for use in the initial position
+    /// of a Hangul syllable.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::JamoConsonantComposite;
+    ///
+    /// let ssang_giyeok = JamoConsonantComposite::SsangGiyeok;
+    /// assert!(ssang_giyeok.is_valid_initial());
+    ///
+    /// let gieok_siot = JamoConsonantComposite::GiyeokSiot;
+    /// assert!(!gieok_siot.is_valid_initial());
+    /// ```
     pub fn is_valid_initial(&self) -> bool {
         match self {
             JamoConsonantComposite::SsangGiyeok
@@ -718,6 +888,19 @@ impl JamoConsonantComposite {
         }
     }
 
+    /// Checks if the composite consonant is valid for use in the final position
+    /// of a Hangul syllable.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::JamoConsonantComposite;
+    ///
+    /// let rieul_mieum = JamoConsonantComposite::RieulMieum;
+    /// assert!(rieul_mieum.is_valid_final());
+    ///
+    /// let ssang_giyeok = JamoConsonantComposite::SsangGiyeok;
+    /// assert!(ssang_giyeok.is_valid_final());
+    /// ```
     pub fn is_valid_final(&self) -> bool {
         match self {
             JamoConsonantComposite::GiyeokSiot
@@ -738,6 +921,7 @@ impl JamoConsonantComposite {
     }
 }
 
+/// An enum representing singular Hangul vowel jamo.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum JamoVowelSingular {
     /// ㅏ
@@ -771,6 +955,17 @@ pub enum JamoVowelSingular {
 }
 
 impl JamoVowelSingular {
+    /// Returns the modern jamo character for this singular vowel.
+    /// No position is needed since vowels only have one encoding
+    /// in the modern Jamo Unicode block.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::JamoVowelSingular;
+    ///
+    /// let eo = JamoVowelSingular::Eo;
+    /// assert_eq!(eo.char_modern(), '\u{1165}'); // Modern ㅓ
+    /// ```
     pub fn char_modern(&self) -> char {
         match self {
             JamoVowelSingular::A => '\u{1161}',
@@ -790,6 +985,15 @@ impl JamoVowelSingular {
         }
     }
 
+    /// Returns the compatibility jamo character for this singular vowel.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::JamoVowelSingular;
+    ///
+    /// let yo = JamoVowelSingular::Yo;
+    /// assert_eq!(yo.char_compatibility(), 'ㅛ');
+    /// ```
     pub fn char_compatibility(&self) -> char {
         match self {
             JamoVowelSingular::A => 'ㅏ',
@@ -809,6 +1013,29 @@ impl JamoVowelSingular {
         }
     }
 
+    /// Combines this singular vowel with another singular vowel
+    /// to form a composite vowel. Returns `None` if the combination is not valid.
+    ///
+    /// Only the following combinations are valid:
+    /// - ㅗ + ㅏ = ㅘ
+    /// - ㅗ + ㅐ = ㅙ
+    /// - ㅗ + ㅣ = ㅚ
+    /// - ㅜ + ㅓ = ㅝ
+    /// - ㅜ + ㅔ = ㅞ
+    /// - ㅜ + ㅣ = ㅟ
+    /// - ㅡ + ㅣ = ㅢ
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::{
+    ///     JamoVowelSingular,
+    ///     JamoVowelComposite,
+    /// };
+    ///
+    /// let o = JamoVowelSingular::O;                           // ㅗ
+    /// let composite = o.combine(&JamoVowelSingular::A);       // ㅏ
+    /// assert_eq!(composite, Some(JamoVowelComposite::Wa));    // ㅘ
+    /// ```
     pub fn combine(&self, other: &JamoVowelSingular) -> Option<JamoVowelComposite> {
         match (self, other) {
             (JamoVowelSingular::O, JamoVowelSingular::A) => Some(JamoVowelComposite::Wa),
@@ -823,6 +1050,7 @@ impl JamoVowelSingular {
     }
 }
 
+/// An enum representing composite Hangul vowel jamo.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum JamoVowelComposite {
     /// ㅘ
@@ -842,6 +1070,17 @@ pub enum JamoVowelComposite {
 }
 
 impl JamoVowelComposite {
+    /// Returns the modern jamo character for this composite vowel.
+    /// No position is needed since vowels only have one encoding
+    /// in the modern Jamo Unicode block.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::JamoVowelComposite;
+    ///
+    /// let wae = JamoVowelComposite::Wae;
+    /// assert_eq!(wae.char_modern(), '\u{116B}'); // Modern ㅙ
+    /// ```
     pub fn char_modern(&self) -> char {
         match self {
             JamoVowelComposite::Wa => '\u{116A}',
@@ -854,6 +1093,15 @@ impl JamoVowelComposite {
         }
     }
 
+    /// Returns the compatibility jamo character for this composite vowel.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::JamoVowelComposite;
+    ///
+    /// let wae = JamoVowelComposite::Wae;
+    /// assert_eq!(wae.char_compatibility(), 'ㅙ');
+    /// ```
     pub fn char_compatibility(&self) -> char {
         match self {
             JamoVowelComposite::Wa => 'ㅘ',
@@ -866,6 +1114,21 @@ impl JamoVowelComposite {
         }
     }
 
+    /// Decomposes the composite vowel into its two constituent singular vowels.
+    ///
+    /// **Example:**
+    /// ```rust
+    /// use hangul::jamo::{
+    ///     Jamo,
+    ///     JamoVowelSingular,
+    ///     JamoVowelComposite,
+    /// };
+    ///
+    /// let composite = JamoVowelComposite::Wae;
+    /// let (first, second) = composite.decompose();
+    /// assert_eq!(first, Jamo::Vowel(JamoVowelSingular::O));
+    /// assert_eq!(second, Jamo::Vowel(JamoVowelSingular::Ae));
+    /// ```
     pub fn decompose(&self) -> (Jamo, Jamo) {
         match self {
             JamoVowelComposite::Wa => (
@@ -900,6 +1163,8 @@ impl JamoVowelComposite {
     }
 }
 
+/// An enum representing Hangul jamo, including both consonants and vowels,
+/// as well as singular and composite forms.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum JamoPosition {
     Initial,
@@ -928,6 +1193,10 @@ impl Jamo {
 
     /// Returns the modern jamo character for this Jamo.
     /// This is a different Unicode codepoint than the compatibility version.
+    /// A position must be specified because some jamo have multiple forms;
+    /// for example, consonants can have different modern block
+    /// encodings depending on whether
+    /// they appear at the beginning or end of a syllable.
     ///
     /// **Example:**
     /// ```rust

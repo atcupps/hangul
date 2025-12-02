@@ -4,20 +4,27 @@ use thiserror::Error;
 
 use crate::{block::*, jamo::*};
 
+/// A composer for a single Hangul word, made up of multiple syllable blocks.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum WordError {
+    /// Occurs when there is an error related to syllable blocks.
     #[error("Block error: {0}")]
     BlockError(#[from] BlockError),
 
+    /// Occurs when there is an error related to Jamo letters.
     #[error("Jamo error: {0}")]
     JamoError(#[from] JamoError),
 
+    /// Tried to start a new block while pushing Jamo, but it was not possible.
+    /// The reason is provided in the `BlockPushResult`.
     #[error("Could not start new block with character '{0}'; reason: {1:?}")]
     CouldNotStartNewBlock(char, BlockPushResult),
 
+    /// Tried popping from an empty word (no Jamo to pop).
     #[error("Tried popping from empty word")]
     NothingToPop,
 
+    /// Tried to complete the current block, but it only contains one Jamo.
     #[error("Cannot complete current block; currently contains only one Jamo: {0:?}")]
     CannotCompleteCurrentBlock(Jamo),
 }
