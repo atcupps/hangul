@@ -1,7 +1,13 @@
 [package]
 name = "hangul-cd"
 version = "0.1.0"
+authors = ["Andrew Cupps"]
 edition = "2024"
+description = "hangul-cd (compose-decompose): Rust helpers for composing and decomposing Hangul syllable blocks and words."
+repository = "https://github.com/atcupps/hangul-cd"
+readme = "README.md"
+keywords = ["korean", "hangul", "unicode", "parsing", "characters"]
+categories = ["parsing", "internationalization", "localization"]
 
 [dependencies]
 thiserror = "2.0.17"
