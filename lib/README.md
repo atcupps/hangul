@@ -2,7 +2,7 @@
 
 *(hangul compose and decompose)*
 
-Rust helpers for composing and decomposing Hangul syllable blocks and words. The crate in `lib/` exposes small, focused modules for combining jamo into syllables, grouping syllables into words, and mixing Hangul with arbitrary text while enforcing valid Unicode Hangul composition rules.
+Rust helpers for composing and decomposing Hangul syllable blocks and words. This crate xposes small, focused modules for combining jamo into syllables, grouping syllables into words, and mixing Hangul with arbitrary text while enforcing valid Unicode Hangul composition rules.
 
 ### Modules
 
