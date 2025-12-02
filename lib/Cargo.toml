@@ -8,6 +8,7 @@ repository = "https://github.com/atcupps/hangul-cd"
 readme = "README.md"
 keywords = ["korean", "hangul", "unicode", "parsing", "characters"]
 categories = ["parsing", "internationalization", "localization"]
+license = "MIT"
 
 [dependencies]
 thiserror = "2.0.17"
