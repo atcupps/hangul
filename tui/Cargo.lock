@@ -274,7 +274,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
 
 [[package]]
-name = "hangul"
+name = "hangul-cd"
 version = "0.1.0"
 dependencies = [
  "thiserror",
@@ -747,7 +747,7 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "crossterm 0.29.0",
- "hangul",
+ "hangul-cd",
  "ratatui",
 ]
 

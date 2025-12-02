@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "hangul"
+name = "hangul-cd"
 version = "0.1.0"
 dependencies = [
  "thiserror",
