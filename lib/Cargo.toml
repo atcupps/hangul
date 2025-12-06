@@ -1,6 +1,6 @@
 [package]
 name = "hangul-cd"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Andrew Cupps"]
 edition = "2024"
 description = "hangul-cd (compose-decompose): Rust helpers for composing and decomposing Hangul syllable blocks and words."
